@@ -24,15 +24,16 @@ export default function Dashboard() {
         <>
             <Head title="Dashboard" />
 
-            <main className="min-h-screen bg-white text-[#2b211b]">
+            <main className="min-h-screen bg-white font-montserrat text-[#2b211b]">
                 <Header
+                    activePage="inicio"
                     onScrollToResources={scrollToResources}
                     onScrollToModules={scrollToModules}
                 />
 
                 <section className="mx-auto grid max-w-[78rem] grid-cols-1 items-center gap-10 px-10 py-20 lg:grid-cols-[1fr_1fr]">
                     <div>
-                        <h1 className="max-w-[33rem] text-[2.7rem] font-black leading-tight text-[#1d1d1d]">
+                        <h1 className="max-w-[33rem] font-inter text-[2.7rem] font-black leading-tight text-[#1d1d1d]">
                             Método Simplex e
                             <br />
                             <span className="text-[#653018]">
@@ -92,7 +93,7 @@ export default function Dashboard() {
                 >
                     <div className="mx-auto max-w-[78rem]">
                         <div className="text-center">
-                            <h2 className="text-[2.7rem] font-black text-[#653018]">
+                            <h2 className="font-inter text-[2.7rem] font-black text-[#653018]">
                                 Recursos Principais
                             </h2>
 
@@ -114,7 +115,7 @@ export default function Dashboard() {
                                         />
                                     </div>
 
-                                    <h3 className="text-xl font-black text-[#653018]">
+                                    <h3 className="font-inter text-xl font-black text-[#653018]">
                                         Método Simplex
                                     </h3>
                                 </div>
@@ -137,7 +138,7 @@ export default function Dashboard() {
                                         />
                                     </div>
 
-                                    <h3 className="text-xl font-black text-[#653018]">
+                                    <h3 className="font-inter text-xl font-black text-[#653018]">
                                         Visualização Gráfica
                                     </h3>
                                 </div>
@@ -160,7 +161,7 @@ export default function Dashboard() {
                                         />
                                     </div>
 
-                                    <h3 className="text-xl font-black text-[#653018]">
+                                    <h3 className="font-inter text-xl font-black text-[#653018]">
                                         Análise de Sensibilidade
                                     </h3>
                                 </div>
@@ -178,7 +179,7 @@ export default function Dashboard() {
                 <section ref={modulesRef} className="px-10 py-20">
                     <div className="mx-auto max-w-[78rem]">
                         <div className="text-center">
-                            <h2 className="text-[2.7rem] font-black text-[#653018]">
+                            <h2 className="font-inter text-[2.7rem] font-black text-[#653018]">
                                 Novo Problema
                             </h2>
 
@@ -190,7 +191,7 @@ export default function Dashboard() {
                         </div>
 
                         <div className="mt-14">
-                            <h3 className="text-[2rem] font-black text-[#1d1d1d]">
+                            <h3 className="font-inter text-[2rem] font-black text-[#1d1d1d]">
                                 Selecione um{' '}
                                 <span className="text-[#653018]">Módulo</span>
                             </h3>
@@ -212,7 +213,7 @@ export default function Dashboard() {
                                             className="h-12 w-12 object-contain"
                                         />
 
-                                        <strong className="text-2xl font-black text-[#653018]">
+                                        <strong className="font-inter text-2xl font-black text-[#653018]">
                                             EQUAÇÃO LINEAR
                                         </strong>
                                     </div>
@@ -237,7 +238,7 @@ export default function Dashboard() {
                                             className="h-12 w-12 object-contain"
                                         />
 
-                                        <strong className="text-2xl font-black text-[#653018]">
+                                        <strong className="font-inter text-2xl font-black text-[#653018]">
                                             PROGRAMAÇÃO LINEAR
                                         </strong>
                                     </div>
@@ -262,7 +263,7 @@ export default function Dashboard() {
                                             className="h-12 w-12 object-contain"
                                         />
 
-                                        <strong className="text-2xl font-black text-[#653018]">
+                                        <strong className="font-inter text-2xl font-black text-[#653018]">
                                             PROGRAMAÇÃO INTEIRA
                                         </strong>
                                     </div>

@@ -1,7 +1,7 @@
 import InputError from '@/Components/InputError';
 import { Head, Link, useForm } from '@inertiajs/react';
 
-export default function Login({ status }) {
+export default function Login({ status, canResetPassword }) {
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
@@ -100,10 +100,21 @@ export default function Login({ status }) {
                             />
                         </div>
 
+                        {canResetPassword && (
+                            <div className="mt-[0.75rem] text-right">
+                                <Link
+                                    href={route('password.request')}
+                                    className="text-sm font-medium text-blue-600 hover:underline"
+                                >
+                                    Esqueci minha senha
+                                </Link>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             disabled={processing}
-                            className="mt-[1.5rem] h-[3.25rem] w-full rounded-lg bg-[#683015] text-xl font-bold text-white transition hover:bg-[#53250f] disabled:cursor-not-allowed disabled:opacity-70"
+                            className="mt-[1.25rem] h-[3.25rem] w-full rounded-lg bg-[#683015] text-xl font-bold text-white transition hover:bg-[#53250f] disabled:cursor-not-allowed disabled:opacity-70"
                         >
                             Login
                         </button>

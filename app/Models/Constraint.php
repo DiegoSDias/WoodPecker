@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Operator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -17,6 +18,7 @@ class Constraint extends Model
     protected $casts = [
         'coefficients' => 'array',
         'rhs_value' => 'float',
+        'operator' => Operator::class
     ];
 
     public function project(): BelongsTo

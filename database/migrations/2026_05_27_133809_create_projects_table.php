@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\OptimizationType;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -18,7 +19,7 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->integer('num_variables');
             $table->integer('num_constraints');
-            $table->enum('optimization_type', ['max', 'min']);
+            $table->enum('optimization_type', array_column(OptimizationType::cases(), 'value'));
             $table->timestamps();
             $table->softDeletes();
         });

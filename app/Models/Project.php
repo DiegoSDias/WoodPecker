@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OptimizationType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,6 +21,19 @@ class Project extends Model
         'num_constraints',
         'optimization_type',
     ];
+
+
+        /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'optimization_type' => OptimizationType::class
+        ];
+    }
 
     public function user(): BelongsTo
     {

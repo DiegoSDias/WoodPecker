@@ -1,10 +1,15 @@
 import Header from '@/Components/Header';
-import { Head } from '@inertiajs/react';
-import { useRef } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { useRef, useState } from 'react';
 
-export default function Dashboard() {
+export default function Dashboard({ auth }) {
     const resourcesRef = useRef(null);
     const modulesRef = useRef(null);
+    const guestFormRef = useRef(null);
+
+    const [showAccessModal, setShowAccessModal] = useState(false);
+    const [selectedModule, setSelectedModule] = useState(null);
+    const [isGuestMode, setIsGuestMode] = useState(false);
 
     const scrollToResources = () => {
         resourcesRef.current?.scrollIntoView({
@@ -20,19 +25,41 @@ export default function Dashboard() {
         });
     };
 
+    const handleModuleClick = (moduleName) => {
+        setSelectedModule(moduleName);
+        setShowAccessModal(true);
+    };
+
+    const handleLoginRedirect = () => {
+        router.visit(route('login'));
+    };
+
+    const handleContinueWithoutLogin = () => {
+        setIsGuestMode(true);
+        setShowAccessModal(false);
+
+        setTimeout(() => {
+            guestFormRef.current?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+        }, 150);
+    };
+
     return (
         <>
-            <Head title="Dashboard" />
+            <Head title="Woodpecker" />
 
-            <main className="min-h-screen bg-white text-[#2b211b]">
+            <main className="min-h-screen bg-white font-montserrat text-[#2b211b]">
                 <Header
+                    auth={auth}
                     onScrollToResources={scrollToResources}
                     onScrollToModules={scrollToModules}
                 />
 
                 <section className="mx-auto grid max-w-[78rem] grid-cols-1 items-center gap-10 px-10 py-20 lg:grid-cols-[1fr_1fr]">
                     <div>
-                        <h1 className="max-w-[33rem] text-[2.7rem] font-black leading-tight text-[#1d1d1d]">
+                        <h1 className="max-w-[33rem] font-inter text-[2.7rem] font-black leading-tight text-[#1d1d1d]">
                             Método Simplex e
                             <br />
                             <span className="text-[#653018]">
@@ -92,7 +119,7 @@ export default function Dashboard() {
                 >
                     <div className="mx-auto max-w-[78rem]">
                         <div className="text-center">
-                            <h2 className="text-[2.7rem] font-black text-[#653018]">
+                            <h2 className="font-inter text-[2.7rem] font-black text-[#653018]">
                                 Recursos Principais
                             </h2>
 
@@ -178,7 +205,7 @@ export default function Dashboard() {
                 <section ref={modulesRef} className="px-10 py-20">
                     <div className="mx-auto max-w-[78rem]">
                         <div className="text-center">
-                            <h2 className="text-[2.7rem] font-black text-[#653018]">
+                            <h2 className="font-inter text-[2.7rem] font-black text-[#653018]">
                                 Novo Problema
                             </h2>
 
@@ -190,7 +217,7 @@ export default function Dashboard() {
                         </div>
 
                         <div className="mt-14">
-                            <h3 className="text-[2rem] font-black text-[#1d1d1d]">
+                            <h3 className="font-inter text-[2rem] font-black text-[#1d1d1d]">
                                 Selecione um{' '}
                                 <span className="text-[#653018]">Módulo</span>
                             </h3>
@@ -201,84 +228,85 @@ export default function Dashboard() {
                             </p>
 
                             <div className="mx-auto mt-12 max-w-[56rem] space-y-6">
-                                <button
-                                    type="button"
-                                    className="grid w-full grid-cols-[1fr_1.2fr] overflow-hidden rounded-xl bg-[#eadccb] text-left shadow-md transition hover:scale-[1.01]"
-                                >
-                                    <div className="flex items-center gap-10 px-12 py-6">
-                                        <img
-                                            src="/images/chart-dots.png"
-                                            alt=""
-                                            className="h-12 w-12 object-contain"
-                                        />
+                                <ModuleButton
+                                    icon="/images/chart-dots.png"
+                                    title="EQUAÇÃO LINEAR"
+                                    items={[
+                                        'Gauss-Jordan',
+                                        'Escalonamento',
+                                        'Matrizes',
+                                    ]}
+                                    onClick={() =>
+                                        handleModuleClick('equacao-linear')
+                                    }
+                                />
 
-                                        <strong className="text-2xl font-black text-[#653018]">
-                                            EQUAÇÃO LINEAR
-                                        </strong>
-                                    </div>
+                                <ModuleButton
+                                    icon="/images/chart-line.png"
+                                    title="PROGRAMAÇÃO LINEAR"
+                                    items={[
+                                        'Simplex',
+                                        'Região Viável',
+                                        'Análise de Sensibilidade',
+                                    ]}
+                                    onClick={() =>
+                                        handleModuleClick(
+                                            'programacao-linear'
+                                        )
+                                    }
+                                />
 
-                                    <div className="border-l border-[#b38563] px-12 py-5 text-lg text-[#333333]">
-                                        <ul className="list-disc space-y-2">
-                                            <li>Gauss-Jordan</li>
-                                            <li>Escalonamento</li>
-                                            <li>Matrizes</li>
-                                        </ul>
-                                    </div>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    className="grid w-full grid-cols-[1fr_1.2fr] overflow-hidden rounded-xl bg-[#eadccb] text-left shadow-md transition hover:scale-[1.01]"
-                                >
-                                    <div className="flex items-center gap-10 px-12 py-6">
-                                        <img
-                                            src="/images/chart-line.png"
-                                            alt=""
-                                            className="h-12 w-12 object-contain"
-                                        />
-
-                                        <strong className="text-2xl font-black text-[#653018]">
-                                            PROGRAMAÇÃO LINEAR
-                                        </strong>
-                                    </div>
-
-                                    <div className="border-l border-[#b38563] px-12 py-5 text-lg text-[#333333]">
-                                        <ul className="list-disc space-y-2">
-                                            <li>Simplex</li>
-                                            <li>Região Viável</li>
-                                            <li>Análise de Sensibilidade</li>
-                                        </ul>
-                                    </div>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    className="grid w-full grid-cols-[1fr_1.2fr] overflow-hidden rounded-xl bg-[#eadccb] text-left shadow-md transition hover:scale-[1.01]"
-                                >
-                                    <div className="flex items-center gap-10 px-12 py-6">
-                                        <img
-                                            src="/images/chart-bar.png"
-                                            alt=""
-                                            className="h-12 w-12 object-contain"
-                                        />
-
-                                        <strong className="text-2xl font-black text-[#653018]">
-                                            PROGRAMAÇÃO INTEIRA
-                                        </strong>
-                                    </div>
-
-                                    <div className="border-l border-[#b38563] px-12 py-5 text-lg text-[#333333]">
-                                        <ul className="list-disc space-y-2">
-                                            <li>Branch and Bound</li>
-                                            <li>Restrições Inteiras</li>
-                                            <li>Soluções Otimizadas</li>
-                                        </ul>
-                                    </div>
-                                </button>
+                                <ModuleButton
+                                    icon="/images/chart-bar.png"
+                                    title="PROGRAMAÇÃO INTEIRA"
+                                    items={[
+                                        'Branch and Bound',
+                                        'Restrições Inteiras',
+                                        'Soluções Otimizadas',
+                                    ]}
+                                    onClick={() =>
+                                        handleModuleClick(
+                                            'programacao-inteira'
+                                        )
+                                    }
+                                />
                             </div>
                         </div>
                     </div>
                 </section>
+
+                {isGuestMode && (
+                    <section
+                        ref={guestFormRef}
+                        className="bg-[#faf7f3] px-10 py-16"
+                    >
+                        <div className="mx-auto max-w-[78rem]">
+                            <div className="rounded-xl border border-[#d6bfa8] bg-white p-8 shadow-md">
+                                <div className="rounded-lg bg-[#fff3cd] px-5 py-4 text-[#7a4b00]">
+                                    Você está usando o sistema sem login. O
+                                    problema poderá ser resolvido, mas não será
+                                    salvo em “Meus projetos”.
+                                </div>
+
+                                <h2 className="mt-8 font-inter text-[2rem] font-black text-[#653018]">
+                                    Inserir dados do problema
+                                </h2>
+
+                                <p className="mt-3 text-lg text-[#333333]">
+                                    Módulo selecionado:{' '}
+                                    <span className="font-bold text-[#653018]">
+                                        {formatModuleName(selectedModule)}
+                                    </span>
+                                </p>
+
+                                <div className="mt-8 rounded-lg border border-dashed border-[#b38563] bg-[#faf7f3] p-8 text-center text-lg text-[#653018]">
+                                    Área reservada para o formulário do módulo
+                                    selecionado.
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                )}
 
                 <footer
                     className="h-[5rem] bg-cover bg-center bg-no-repeat"
@@ -286,7 +314,101 @@ export default function Dashboard() {
                         backgroundImage: "url('/images/wood-background.png')",
                     }}
                 />
+
+                {showAccessModal && (
+                    <AccessChoiceModal
+                        onClose={() => setShowAccessModal(false)}
+                        onLogin={handleLoginRedirect}
+                        onContinue={handleContinueWithoutLogin}
+                    />
+                )}
             </main>
         </>
     );
+}
+
+function ModuleButton({ icon, title, items, onClick }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="grid w-full grid-cols-[1fr_1.2fr] overflow-hidden rounded-xl bg-[#eadccb] text-left shadow-md transition hover:scale-[1.01]"
+        >
+            <div className="flex items-center gap-10 px-12 py-6">
+                <img
+                    src={icon}
+                    alt=""
+                    className="h-12 w-12 object-contain"
+                />
+
+                <strong className="text-2xl font-black text-[#653018]">
+                    {title}
+                </strong>
+            </div>
+
+            <div className="border-l border-[#b38563] px-12 py-5 text-lg text-[#333333]">
+                <ul className="list-disc space-y-2">
+                    {items.map((item) => (
+                        <li key={item}>{item}</li>
+                    ))}
+                </ul>
+            </div>
+        </button>
+    );
+}
+
+function AccessChoiceModal({ onClose, onLogin, onContinue }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+            <div className="w-full max-w-[32rem] rounded-2xl bg-white p-8 shadow-2xl">
+                <div className="flex justify-end">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="text-2xl font-bold text-gray-500 transition hover:text-[#653018]"
+                    >
+                        ×
+                    </button>
+                </div>
+
+                <h2 className="text-center font-inter text-[2rem] font-black text-[#653018]">
+                    Como deseja continuar?
+                </h2>
+
+                <p className="mt-4 text-center text-base leading-relaxed text-gray-600">
+                    Você pode entrar na sua conta para salvar o projeto ou
+                    continuar sem login apenas para testar e resolver o
+                    problema.
+                </p>
+
+                <div className="mt-8 space-y-4">
+                    <button
+                        type="button"
+                        onClick={onLogin}
+                        className="w-full rounded-lg bg-[#733615] px-5 py-3 text-lg font-bold text-white transition hover:bg-[#5b2a10]"
+                    >
+                        Entrar na minha conta
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={onContinue}
+                        className="w-full rounded-lg bg-[#eadccb] px-5 py-3 text-lg font-bold text-[#653018] transition hover:bg-[#dfcbb6]"
+                    >
+                        Continuar sem login
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function formatModuleName(moduleName) {
+    const modules = {
+        'equacao-linear': 'Equação Linear',
+        'programacao-linear': 'Programação Linear',
+        'programacao-inteira': 'Programação Inteira',
+    };
+
+    return modules[moduleName] || 'Não informado';
 }

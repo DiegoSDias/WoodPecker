@@ -1,10 +1,9 @@
 <?php
 
-use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-use Laravel\Socialite\Socialite;
+
 
 Route::get('/', function () {
     return Inertia::render('Dashboard');

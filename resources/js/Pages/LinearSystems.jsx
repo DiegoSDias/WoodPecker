@@ -332,12 +332,6 @@ function ResultCard({ result, variables }) {
                                 </div>
                             ))}
                         </div>
-
-                        <p className="mt-10 text-center font-montserrat text-sm font-semibold leading-relaxed text-[#777777]">
-                            Método:
-                            <br />
-                            Eliminação Gauss-Jordan
-                        </p>
                     </div>
                 )}
 

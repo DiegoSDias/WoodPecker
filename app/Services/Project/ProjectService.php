@@ -118,7 +118,7 @@ class ProjectService
         return $project->solutions()->create([
             'method_used' => $method,
             'z_value' => $this->extractObjectiveValue($result),
-            'variables_result' => $result,
+            'variables_result' => $result['solution'],
         ]);
     }
 

@@ -7,6 +7,8 @@ use RuntimeException;
 
 class GraphicalMethodService
 {
+    private const EPSILON = 1e-9;
+
     public function __construct(
         protected LinearProgrammingCoreService $core,
         protected ProjectService $projectService
@@ -92,8 +94,8 @@ class GraphicalMethodService
                 }
 
                 $points[] = [
-                    'x' => $this->cleanValue($point[0]),
-                    'y' => $this->cleanValue($point[1]),
+                    'x' => $this->sanitizeCoordinate($point[0]),
+                    'y' => $this->sanitizeCoordinate($point[1]),
                     'constraints' => [$i + 1, $j + 1],
                 ];
             }
@@ -120,7 +122,7 @@ class GraphicalMethodService
         $x = (float) $point['x'];
         $y = (float) $point['y'];
 
-        if ($x < -1e-9 || $y < -1e-9) {
+        if ($x < -self::EPSILON || $y < -self::EPSILON) {
             return false;
         }
 
@@ -129,15 +131,15 @@ class GraphicalMethodService
                 + ((float) $constraint['coefficients'][1] * $y);
             $rhs = (float) $constraint['rhs_value'];
 
-            if ($constraint['operator'] === '<=' && $lhs - $rhs > 1e-9) {
+            if ($constraint['operator'] === '<=' && $lhs - $rhs > self::EPSILON) {
                 return false;
             }
 
-            if ($constraint['operator'] === '>=' && $rhs - $lhs > 1e-9) {
+            if ($constraint['operator'] === '>=' && $rhs - $lhs > self::EPSILON) {
                 return false;
             }
 
-            if ($constraint['operator'] === '=' && abs($lhs - $rhs) > 1e-9) {
+            if ($constraint['operator'] === '=' && abs($lhs - $rhs) > self::EPSILON) {
                 return false;
             }
         }
@@ -223,7 +225,7 @@ class GraphicalMethodService
     {
         $determinant = ((float) $left[0] * (float) $right[1]) - ((float) $left[1] * (float) $right[0]);
 
-        if (abs($determinant) < 1e-9) {
+        if (abs($determinant) < self::EPSILON) {
             return null;
         }
 
@@ -239,7 +241,7 @@ class GraphicalMethodService
         $seen = [];
 
         foreach ($points as $point) {
-            $key = round((float) $point['x'], 6) . ':' . round((float) $point['y'], 6);
+            $key = $this->pointKey($point['x'], $point['y']);
             if (isset($seen[$key])) {
                 continue;
             }
@@ -253,10 +255,27 @@ class GraphicalMethodService
 
     private function cleanValue(float $value): float
     {
-        if (abs($value) < 1e-9) {
+        return $this->sanitizeCoordinate($value);
+    }
+
+    private function sanitizeCoordinate(float $value): float
+    {
+        if (abs($value) < self::EPSILON) {
             return 0.0;
         }
 
-        return round($value, 6);
+        return $value;
+    }
+
+    private function pointKey(float $x, float $y): string
+    {
+        return $this->formatCoordinate($x) . ':' . $this->formatCoordinate($y);
+    }
+
+    private function formatCoordinate(float $value): string
+    {
+        $normalized = $this->sanitizeCoordinate($value);
+
+        return sprintf('%.6f', $normalized);
     }
 }

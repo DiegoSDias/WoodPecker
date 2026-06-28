@@ -8,6 +8,7 @@ class BranchAndBoundService
 {
     private const MAX_NODES = 64;
     private const MAX_DEPTH = 20;
+    private const EPSILON = 1e-6;
 
     public function __construct(
         protected LinearProgrammingCoreService $core,
@@ -106,14 +107,6 @@ class BranchAndBoundService
             'new_bound' => $this->formatLatestBound($extraConstraints),
             'pruned_reason' => null,
         ];
-
-        if (!$this->solutionRespectsConstraints($record['solution'], $constraints)) {
-            $record['status'] = 'pruned';
-            $record['pruned_reason'] = 'invalid_relaxation';
-            $summary['pruned_nodes']++;
-            $iterations[] = $record;
-            return;
-        }
 
         if (in_array($relaxation['status'], ['infeasible', 'unbounded', 'iteration_limit', 'cycled'], true)) {
             $record['status'] = 'pruned';
@@ -286,7 +279,7 @@ class BranchAndBoundService
     private function isIntegerSolution(array $solution): bool
     {
         foreach ($solution as $value) {
-            if (abs($value - round($value)) > 1e-9) {
+            if (abs($value - round($value)) > self::EPSILON) {
                 return false;
             }
         }
@@ -301,7 +294,7 @@ class BranchAndBoundService
 
         foreach ($solution as $name => $value) {
             $fraction = abs($value - round($value));
-            if ($fraction <= 1e-9) {
+            if ($fraction <= self::EPSILON) {
                 continue;
             }
 
@@ -342,11 +335,11 @@ class BranchAndBoundService
         $current = (float) $candidate['objective_value'];
         $best = (float) $bestSolution['objective_value'];
 
-        if ($project->optimization_type->value === 'max' && $current > $best + 1e-9) {
+        if ($project->optimization_type->value === 'max' && $current > $best + self::EPSILON) {
             $bestSolution = $candidate;
         }
 
-        if ($project->optimization_type->value === 'min' && $current < $best - 1e-9) {
+        if ($project->optimization_type->value === 'min' && $current < $best - self::EPSILON) {
             $bestSolution = $candidate;
         }
     }
@@ -365,10 +358,10 @@ class BranchAndBoundService
         $best = (float) ($bestSolution['objective_value'] ?? 0.0);
 
         if ($project->optimization_type->value === 'max') {
-            return $current <= $best + 1e-9;
+            return $current <= $best + self::EPSILON;
         }
 
-        return $current >= $best - 1e-9;
+        return $current >= $best - self::EPSILON;
     }
 
     private function solutionRespectsConstraints(array $solution, array $constraints): bool
@@ -386,15 +379,15 @@ class BranchAndBoundService
 
             $rhs = (float) $constraint['rhs_value'];
 
-            if ($constraint['operator'] === '<=' && $lhs - $rhs > 1e-9) {
+            if ($constraint['operator'] === '<=' && $lhs - $rhs > self::EPSILON) {
                 return false;
             }
 
-            if ($constraint['operator'] === '>=' && $rhs - $lhs > 1e-9) {
+            if ($constraint['operator'] === '>=' && $rhs - $lhs > self::EPSILON) {
                 return false;
             }
 
-            if ($constraint['operator'] === '=' && abs($lhs - $rhs) > 1e-9) {
+            if ($constraint['operator'] === '=' && abs($lhs - $rhs) > self::EPSILON) {
                 return false;
             }
         }
@@ -428,3 +421,4 @@ class BranchAndBoundService
         return array_reverse($path);
     }
 }
+

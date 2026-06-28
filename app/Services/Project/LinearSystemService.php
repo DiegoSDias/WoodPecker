@@ -2,7 +2,6 @@
 
 namespace App\Services\Project;
 
-use RuntimeException;
 
 class LinearSystemService
 {

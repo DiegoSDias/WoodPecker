@@ -41,14 +41,12 @@ class DualSimplexService
 
         $result = [
             'primal' => [
-                'project' => $project->toArray(),
                 'solution' => $primal,
             ],
             'dual' => [
                 'problem' => $dualProblem,
                 'solution' => $dualResult,
             ],
-            'iterations' => $dualResult['iterations'] ?? [],
             'solution' => [
                 'primal_solution' => $primal['solution'] ?? [],
                 'dual_solution' => $shadowPrices,

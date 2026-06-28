@@ -1,39 +1,23 @@
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 
-export default function Header({
-    onScrollToResources,
-    onScrollToModules,
-    auth,
-    activePage = 'inicio',
-}) {
+export default function Header({ auth, activePage = 'inicio' }) {
     const isLoggedIn = Boolean(auth?.user);
 
-    const getMenuClass = (page) => {
-        const baseClass =
-            'rounded-full px-4 py-1.5 transition hover:bg-[#eadccb] hover:text-[#653018]';
+    function goToHome() {
+        router.visit(route('dashboard'));
+    }
 
-        const activeClass = 'bg-[#eadccb] text-[#653018] font-semibold';
+    function goToLinearSystems() {
+        router.visit(route('linear-systems'));
+    }
 
-        return activePage === page
-            ? `${baseClass} ${activeClass}`
-            : `${baseClass} text-[#653018]`;
-    };
+    function goToSimplex() {
+        router.visit(route('mathematical-modeling'));
+    }
 
-    const handleGoToStart = () => {
-        window.scrollTo({
-            top: 0,
-            behavior: 'smooth',
-        });
-    };
-
-    const handleGoToNewProblem = () => {
-        if (onScrollToModules) {
-            onScrollToModules();
-            return;
-        }
-
-        window.location.href = '/';
-    };
+    function goToProjects() {
+        router.visit('/my-projects');
+    }
 
     return (
         <header
@@ -43,62 +27,73 @@ export default function Header({
             }}
         >
             <div className="mx-auto flex h-full max-w-[78rem] items-center justify-between px-10">
-                <Link href="/" className="flex items-center">
+                <button
+                    type="button"
+                    onClick={goToHome}
+                    className="flex items-center"
+                    aria-label="Ir para o início"
+                >
                     <img
                         src="/images/logo-woodpecker-horizontal.png"
                         alt="Woodpecker"
                         className="w-[14rem] object-contain"
                     />
-                </Link>
+                </button>
 
-                <nav className="rounded-full bg-white px-3 py-2 shadow-md">
-                    <ul className="flex items-center gap-2 font-montserrat text-base font-medium">
-                        <li>
-                            <button
-                                type="button"
-                                onClick={handleGoToStart}
-                                className={getMenuClass('inicio')}
-                            >
-                                Início
-                            </button>
-                        </li>
+                <nav className="flex items-center gap-2 rounded-full bg-white px-5 py-3 shadow-md">
+                    <HeaderButton
+                        label="Início"
+                        active={activePage === 'inicio'}
+                        onClick={goToHome}
+                    />
 
-                        <li>
-                            <button
-                                type="button"
-                                onClick={handleGoToNewProblem}
-                                className={getMenuClass('novo-problema')}
-                            >
-                                Novo Problema
-                            </button>
-                        </li>
+                    <HeaderButton
+                        label="Linear"
+                        active={activePage === 'linear'}
+                        onClick={goToLinearSystems}
+                    />
 
-                        <li>
-                            <Link
-                                href={
-                                    isLoggedIn
-                                        ? route('dashboard')
-                                        : route('login')
-                                }
-                                className={getMenuClass('projetos')}
-                            >
-                                Meus projetos
-                            </Link>
-                        </li>
-                    </ul>
+                    <HeaderButton
+                        label="Simplex"
+                        active={activePage === 'simplex'}
+                        onClick={goToSimplex}
+                    />
+
+                    <HeaderButton
+                        label="Meus projetos"
+                        active={activePage === 'meus-projetos'}
+                        onClick={goToProjects}
+                    />
                 </nav>
 
                 <Link
                     href={isLoggedIn ? route('profile.edit') : route('login')}
-                    className="flex items-center"
+                    aria-label={isLoggedIn ? 'Abrir perfil' : 'Entrar na conta'}
+                    className="transition hover:scale-105"
                 >
                     <img
                         src="/images/person-circle.png"
-                        alt="Perfil do usuário"
-                        className="w-[2.4rem] object-contain"
+                        alt=""
+                        className="h-12 w-12 object-contain"
                     />
                 </Link>
             </div>
         </header>
+    );
+}
+
+function HeaderButton({ label, active, onClick }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`rounded-full px-7 py-2 font-montserrat text-base font-medium transition ${
+                active
+                    ? 'bg-[#eadccb] text-[#653018]'
+                    : 'text-[#653018] hover:bg-[#f4ebe3]'
+            }`}
+        >
+            {label}
+        </button>
     );
 }

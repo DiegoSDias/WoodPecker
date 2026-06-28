@@ -25,7 +25,11 @@ export default function MyProjects({ auth, projects = [] }) {
     }, [projects, searchTerm]);
 
     function handleViewProject(projectId) {
-        router.visit(route('project-results.show', projectId));
+        router.visit(route('projects.me.show', projectId));
+    }
+
+    function handleDeleteProject(projectId) {
+        router.delete(route('projects.me.destroy', projectId));
     }
 
     function handleBack() {
@@ -173,7 +177,11 @@ export default function MyProjects({ auth, projects = [] }) {
                                                     <ActionButton
                                                         icon="/images/trash-outline.png"
                                                         label="Excluir projeto"
-                                                        disabled
+                                                        onClick={() =>
+                                                            handleDeleteProject(
+                                                                project.id
+                                                            )
+                                                        }
                                                     />
                                                 </div>
                                             </td>

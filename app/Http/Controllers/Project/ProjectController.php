@@ -11,7 +11,7 @@ use App\Services\Project\GraphicalMethodService;
 use App\Services\Project\ProjectService;
 use App\Services\Project\SensitivityAnalysisService;
 use App\Services\Project\SimplexService;
-use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\Response;
 
 class ProjectController extends Controller
 {
@@ -36,28 +36,12 @@ class ProjectController extends Controller
                 'Projeto criado com sucesso!',
                 Response::HTTP_CREATED
             );
+            
         } catch (\Throwable $th) {
             return $this->sendError(
                 ['detalhe' => $th->getMessage()],
                 'Erro ao criar projeto',
                 Response::HTTP_UNPROCESSABLE_ENTITY
-            );
-        }
-    }
-
-    public function show(Project $project)
-    {
-        try {
-            return $this->sendResponse(
-                ['project' => $this->projectService->load($project)],
-                'Projeto carregado com sucesso!',
-                Response::HTTP_OK
-            );
-        } catch (\Throwable $th) {
-            return $this->sendError(
-                ['detalhe' => $th->getMessage()],
-                'Erro ao carregar projeto',
-                Response::HTTP_NOT_FOUND
             );
         }
     }

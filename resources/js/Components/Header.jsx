@@ -16,7 +16,7 @@ export default function Header({ auth, activePage = 'inicio' }) {
     }
 
     function goToProjects() {
-        router.visit('/my-projects');
+        router.visit(route('projects.me.index'));
     }
 
     return (

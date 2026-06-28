@@ -48,6 +48,44 @@ class ProjectService
         });
     }
 
+    public function update(Project $project, array $data): Project
+{
+    return DB::transaction(function () use ($project, $data) {
+
+        $project->update([
+            'title' => $data['title'],
+            'description' => $data['description'] ?? null,
+            'num_variables' => (int) $data['num_variables'],
+            'num_constraints' => (int) $data['num_constraints'],
+            'optimization_type' => $data['optimization_type'],
+        ]);
+
+        $project->objectiveFunction()->update([
+            'coefficients' => $this->normalizeCoefficients(
+                $data['objective_function']['coefficients']
+            ),
+        ]);
+
+        $project->constraints()->delete();
+
+        foreach ($data['constraints'] as $constraint) {
+            $project->constraints()->create([
+                'coefficients' => $this->normalizeCoefficients(
+                    $constraint['coefficients']
+                ),
+                'operator' => $constraint['operator'],
+                'rhs_value' => (float) $constraint['rhs_value'],
+            ]);
+        }
+
+        return $project->fresh([
+            'objectiveFunction',
+            'constraints',
+            'solutions',
+        ]);
+    });
+}
+
     public function load(Project $project): Project
     {
         return $project->load([

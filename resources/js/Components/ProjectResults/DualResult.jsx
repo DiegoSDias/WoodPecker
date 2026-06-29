@@ -12,6 +12,16 @@ import {
 
 export default function DualResult({ data, savedSolution, project }) {
     const primalProject = data?.primal?.project || project;
+    const primalColumnNames = Array.isArray(data?.primal?.solution?.column_names)
+        ? data.primal.solution.column_names
+        : Array.isArray(data?.primal?.column_names)
+          ? data.primal.column_names
+          : [];
+    const dualColumnNames = Array.isArray(data?.dual?.solution?.column_names)
+        ? data.dual.solution.column_names
+        : Array.isArray(data?.dual?.column_names)
+          ? data.dual.column_names
+          : [];
     const dualProblem = buildReadableDualProblem(
         primalProject,
         data?.dual?.problem || null
@@ -72,6 +82,7 @@ export default function DualResult({ data, savedSolution, project }) {
                                 key={`dual-${iteration.iteration || index}-${index}`}
                                 iteration={iteration}
                                 project={dualProblem || primalProject}
+                                columnNames={dualColumnNames}
                             />
                         ))}
                     </div>
@@ -95,6 +106,7 @@ export default function DualResult({ data, savedSolution, project }) {
                                 key={`primal-${iteration.iteration || index}-${index}`}
                                 iteration={iteration}
                                 project={primalProject}
+                                columnNames={primalColumnNames}
                             />
                         ))}
                     </div>
@@ -294,7 +306,7 @@ function DualSymbolCard({ label, imageSrc, value, valueClassName }) {
     );
 }
 
-function IterationBlock({ iteration, project }) {
+function IterationBlock({ iteration, project, columnNames }) {
     return (
         <div>
             <div className="mb-4 flex items-center gap-4">
@@ -308,7 +320,11 @@ function IterationBlock({ iteration, project }) {
             </div>
 
             {Array.isArray(iteration.tableau) && iteration.tableau.length > 0 ? (
-                <IterationTable matrix={iteration.tableau} project={project} />
+                <IterationTable
+                    matrix={iteration.tableau}
+                    project={project}
+                    columnNames={columnNames}
+                />
             ) : (
                 <SmallEmptyText text="Esta iteração não possui tabela registrada." />
             )}
@@ -316,9 +332,13 @@ function IterationBlock({ iteration, project }) {
     );
 }
 
-function IterationTable({ matrix, project }) {
+function IterationTable({ matrix, project, columnNames }) {
     const displayRows = buildDisplayRows(matrix);
-    const headers = buildIterationHeaders(displayRows, project);
+    const baseHeaders =
+        Array.isArray(columnNames) && columnNames.length > 0
+            ? columnNames
+            : buildIterationHeaders(displayRows, project);
+    const headers = buildVisibleHeaders(baseHeaders, displayRows);
     const rowLabels = buildIterationRowLabels(displayRows);
 
     return (
@@ -370,6 +390,22 @@ function IterationTable({ matrix, project }) {
             </div>
         </div>
     );
+}
+
+function buildVisibleHeaders(headers, rows) {
+    const visibleHeaders = [...headers];
+    const rowLength = rows?.[0]?.length || 0;
+
+    if (rowLength > 0 && visibleHeaders.length === rowLength - 1) {
+        visibleHeaders.push('Solution');
+        return visibleHeaders;
+    }
+
+    if (visibleHeaders.length > 0) {
+        visibleHeaders[visibleHeaders.length - 1] = 'Solution';
+    }
+
+    return visibleHeaders;
 }
 
 function EmptyState({ title, description }) {

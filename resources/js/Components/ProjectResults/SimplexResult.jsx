@@ -11,6 +11,7 @@
 export default function SimplexResult({ data, savedSolution, project }) {
     const objectiveValue = data.objective_value ?? savedSolution?.z_value;
     const iterations = extractIterations(data);
+    const columnNames = Array.isArray(data?.column_names) ? data.column_names : [];
 
     return (
         <div className="max-w-[64rem] space-y-9">
@@ -25,6 +26,7 @@ export default function SimplexResult({ data, savedSolution, project }) {
                             key={`${iteration.iteration || index}-${index}`}
                             iteration={iteration}
                             project={project}
+                            columnNames={columnNames}
                         />
                     ))}
                 </div>
@@ -68,6 +70,7 @@ function SimplexIteration({ iteration, project, columnNames }) {
                 <IterationTable
                     matrix={iteration.tableau}
                     project={project}
+                    columnNames={columnNames}
                 />
             ) : (
                 <SmallEmptyText text="Esta iteração não possui tabela registrada." />
@@ -108,9 +111,13 @@ function SimplexSummary({ data, objectiveValue, project }) {
     );
 }
 
-function IterationTable({ matrix, project }) {
+function IterationTable({ matrix, project, columnNames }) {
     const displayRows = buildDisplayRows(matrix);
-    const headers = buildIterationHeaders(displayRows, project);
+    const baseHeaders =
+        Array.isArray(columnNames) && columnNames.length > 0
+            ? columnNames
+            : buildIterationHeaders(displayRows, project);
+    const headers = buildVisibleHeaders(baseHeaders, displayRows);
     const rowLabels = buildIterationRowLabels(displayRows);
 
     return (
@@ -162,6 +169,22 @@ function IterationTable({ matrix, project }) {
             </div>
         </div>
     );
+}
+
+function buildVisibleHeaders(headers, rows) {
+    const visibleHeaders = [...headers];
+    const rowLength = rows?.[0]?.length || 0;
+
+    if (rowLength > 0 && visibleHeaders.length === rowLength - 1) {
+        visibleHeaders.push('Solution');
+        return visibleHeaders;
+    }
+
+    if (visibleHeaders.length > 0) {
+        visibleHeaders[visibleHeaders.length - 1] = 'Solution';
+    }
+
+    return visibleHeaders;
 }
 
 function EmptyState({ title, description }) {

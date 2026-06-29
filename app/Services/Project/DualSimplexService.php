@@ -16,7 +16,7 @@ class DualSimplexService
     {
         $project = $this->projectService->load($project);
 
-        $primal = $this->core->solveSimplex(
+        $primal = $this->core->solveSimplexWithHistory(
             $project->objectiveFunction->coefficients,
             $this->formatConstraints($project),
             $project->optimization_type->value
@@ -28,7 +28,7 @@ class DualSimplexService
             $project->optimization_type->value
         );
 
-        $dualResult = $this->core->solveSimplex(
+        $dualResult = $this->core->solveSimplexWithHistory(
             $dualProblem['objective_function']['coefficients'],
             $dualProblem['constraints'],
             $dualProblem['optimization_type']

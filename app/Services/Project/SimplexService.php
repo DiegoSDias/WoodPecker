@@ -16,7 +16,7 @@ class SimplexService
     {
         $project = $this->projectService->load($project);
 
-        $result = $this->core->solveSimplex(
+        $result = $this->core->solveSimplexWithHistory(
             $project->objectiveFunction->coefficients,
             $this->formatConstraints($project),
             $project->optimization_type->value

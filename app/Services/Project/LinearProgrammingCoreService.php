@@ -175,6 +175,117 @@ class LinearProgrammingCoreService
             $optimizationType
         );
 
+        $requiresTwoPhase = $this->requiresTwoPhase($problem['column_names']);
+
+        if (! $requiresTwoPhase) {
+            $initialIteration = [
+                'iteration' => 1,
+                'phase' => 'phase2',
+                'phase_label' => null,
+                'status' => 'initial',
+                'tableau' => $this->cleanTableau([
+                    ...$problem['tableau_rows'],
+                    $this->buildObjectiveRow(
+                        $problem['tableau_rows'],
+                        $problem['basis'],
+                        $problem['phase2_objective']
+                    ),
+                ]),
+            ];
+
+            $phase2 = $this->solvePhase(
+                $problem['tableau_rows'],
+                $problem['basis'],
+                $problem['phase2_objective'],
+                $problem['eligible_phase2'],
+                $problem['column_names'],
+                $storeIterations,
+                $maxIterations
+            );
+
+            $iterations = [$initialIteration];
+            $iterations = $this->mergeIterationsWithPhase(
+                $iterations,
+                $phase2['iterations'],
+                count($iterations),
+                'phase2',
+                'Fase 2'
+            );
+
+            if (in_array($phase2['status'], ['iteration_limit', 'cycled'], true)) {
+                return $this->buildDetailedFailureResult(
+                    $phase2['status'],
+                    $iterations,
+                    $phase2['tableau'],
+                    $problem['column_names'],
+                    []
+                );
+            }
+
+            if ($phase2['status'] === 'unbounded') {
+                return $this->buildDetailedFailureResult(
+                    'unbounded',
+                    $iterations,
+                    $phase2['tableau'],
+                    $problem['column_names'],
+                    []
+                );
+            }
+
+            $solution = $this->extractDecisionSolution(
+                $phase2['tableau_rows'],
+                $phase2['basis'],
+                $problem['column_names'],
+                $problem['decision_count']
+            );
+
+            $objectiveValue = $phase2['objective_value'];
+            if ($optimizationType === 'min') {
+                $objectiveValue *= -1;
+            }
+
+            $reducedCosts = $this->extractReducedCosts(
+                $phase2['tableau'],
+                $problem['decision_count']
+            );
+
+            $alternativeSolutions = $detectMultipleSolutions
+                ? $this->findAlternativeSolutions(
+                    $phase2['tableau_rows'],
+                    $phase2['basis'],
+                    $problem['phase2_objective'],
+                    $problem['eligible_phase2'],
+                    $problem['column_names'],
+                    $problem['decision_count']
+                )
+                : [];
+
+            $flags = [];
+            if ($phase2['degenerate']) {
+                $flags[] = 'degenerate';
+            }
+
+            $status = 'optimal';
+            if (!empty($alternativeSolutions)) {
+                $status = 'multiple';
+            } elseif (!empty($flags)) {
+                $status = 'degenerate';
+            }
+
+            return [
+                'status' => $status,
+                'flags' => $flags,
+                'iterations' => $storeIterations ? $iterations : [],
+                'solution' => $solution,
+                'objective_value' => $objectiveValue,
+                'tableau_final' => $this->cleanTableau($phase2['tableau']),
+                'has_multiple_solution' => !empty($alternativeSolutions),
+                'alternative_solutions' => $alternativeSolutions,
+                'reduced_costs' => $reducedCosts,
+                'column_names' => $problem['column_names'],
+            ];
+        }
+
         $initialIteration = [
             'iteration' => 1,
             'phase' => 'phase1',
@@ -239,12 +350,21 @@ class LinearProgrammingCoreService
             );
         }
 
+        $transitionTableau = $this->cleanTableau([
+            ...$phase1['tableau_rows'],
+            $this->buildObjectiveRow(
+                $phase1['tableau_rows'],
+                $phase1['basis'],
+                $problem['phase2_objective']
+            ),
+        ]);
+
         $iterations[] = [
             'iteration' => count($iterations) + 1,
             'phase' => 'transition',
             'phase_label' => 'Transição',
             'status' => 'phase_change',
-            'tableau' => $phase1['tableau'],
+            'tableau' => $transitionTableau,
         ];
 
         $phase2 = $this->solvePhase(
@@ -991,6 +1111,17 @@ class LinearProgrammingCoreService
         }
 
         return $first;
+    }
+
+    private function requiresTwoPhase(array $columnNames): bool
+    {
+        foreach ($columnNames as $columnName) {
+            if (str_starts_with((string) $columnName, 'a')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function normalizeVector(array $vector): array

@@ -6,7 +6,8 @@ import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 export default function AuthenticatedLayout({ header, children }) {
-    const user = usePage().props.auth.user;
+    const pageAuth = usePage().props?.auth;
+    const user = pageAuth?.user ?? {};
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -42,7 +43,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                                 type="button"
                                                 className="inline-flex items-center rounded-md border border-transparent bg-white px-3 py-2 text-sm font-medium leading-4 text-gray-500 transition duration-150 ease-in-out hover:text-gray-700 focus:outline-none dark:bg-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
                                             >
-                                                {user.name}
+                                                {user.name || 'Usuário'}
 
                                                 <svg
                                                     className="-me-0.5 ms-2 h-4 w-4"
@@ -139,10 +140,10 @@ export default function AuthenticatedLayout({ header, children }) {
                     <div className="border-t border-gray-200 pb-1 pt-4 dark:border-gray-600">
                         <div className="px-4">
                             <div className="text-base font-medium text-gray-800 dark:text-gray-200">
-                                {user.name}
+                                {user.name || 'Usuário'}
                             </div>
                             <div className="text-sm font-medium text-gray-500">
-                                {user.email}
+                                {user.email || ''}
                             </div>
                         </div>
 

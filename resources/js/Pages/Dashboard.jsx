@@ -1,9 +1,11 @@
 import Footer from '@/Components/Footer';
 import Header from '@/Components/Header';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { useRef, useState } from 'react';
 
 export default function Dashboard({ auth }) {
+    const pageAuth = usePage().props?.auth;
+    const currentUser = pageAuth?.user ?? auth?.user ?? null;
     const resourcesRef = useRef(null);
     const modulesRef = useRef(null);
 
@@ -34,7 +36,7 @@ export default function Dashboard({ auth }) {
     const handleModuleClick = (routeName) => {
         setSelectedModuleRoute(routeName);
 
-        if (auth?.user) {
+        if (currentUser) {
             router.visit(route(routeName));
             return;
         }
@@ -65,7 +67,7 @@ export default function Dashboard({ auth }) {
 
             <main className="min-h-screen bg-white font-montserrat text-[#2b211b]">
                 <Header
-                    auth={auth}
+                    auth={{ user: currentUser }}
                     activePage="inicio"
                     onScrollToResources={scrollToResources}
                     onScrollToModules={scrollToModules}

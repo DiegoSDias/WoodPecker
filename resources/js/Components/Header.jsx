@@ -1,7 +1,8 @@
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 
 export default function Header({ auth, activePage = 'inicio' }) {
-    const isLoggedIn = Boolean(auth?.user);
+    const pageAuth = usePage().props?.auth;
+    const isLoggedIn = Boolean(pageAuth?.user ?? auth?.user);
 
     function goToHome() {
         router.visit(route('dashboard'));
@@ -12,7 +13,7 @@ export default function Header({ auth, activePage = 'inicio' }) {
     }
 
     function goToSimplex() {
-        router.visit(isLoggedIn ? route('mathematical-modeling') : route('login'));
+        router.visit(route('mathematical-modeling'));
     }
 
     function goToProjects() {

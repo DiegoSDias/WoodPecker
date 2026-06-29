@@ -22,19 +22,26 @@ export function extractResultData(result) {
         return null;
     }
 
-    if (result.variables_result) {
-        return result.variables_result;
+    let current = result;
+    let guard = 0;
+
+    while (current && typeof current === 'object' && guard < 5) {
+        guard += 1;
+
+        if (current.variables_result) {
+            current = current.variables_result;
+            continue;
+        }
+
+        if (current.data && typeof current.data === 'object') {
+            current = current.data;
+            continue;
+        }
+
+        break;
     }
 
-    if (result.data?.variables_result) {
-        return result.data.variables_result;
-    }
-
-    if (result.data) {
-        return result.data;
-    }
-
-    return result;
+    return current;
 }
 
 export function getLatestSolutionByMethod(solutions, method) {
@@ -71,7 +78,10 @@ export function getObjectiveValue(solution) {
         data?.objective_value ??
         data?.optimal_solution?.objective_value ??
         data?.best_solution?.objective_value ??
+        data?.primal_solution?.objective_value ??
         data?.solution?.objective_value ??
+        data?.solution?.z ??
+        data?.solution?.objective ??
         solution?.z_value
     );
 }
@@ -81,45 +91,85 @@ export function getOverviewVariables(data) {
         return null;
     }
 
-    if (data.solution && !data.solution.primal_solution) {
-        return cleanVariables(data.solution);
-    }
+    const candidates = [
+        data.primal_solution,
+        data.optimal_solution,
+        data.relaxed_solution,
+        data.integer_solution,
+        data.lp_solution,
+        data.ip_solution,
+        data.primal,
+        data.dual,
+        data.best_solution?.variables,
+        data.best_solution?.solution,
+        data.solution?.primal_solution,
+        data.solution?.relaxed_solution,
+        data.solution?.integer_solution,
+        data.solution?.solution,
+        data.solution?.variables,
+        data.solution,
+        data.variables,
+        data.variables_result,
+    ];
 
-    if (data.optimal_solution) {
-        return cleanVariables(data.optimal_solution);
-    }
-
-    if (data.best_solution?.variables) {
-        return cleanVariables(data.best_solution.variables);
-    }
-
-    if (data.solution?.primal_solution) {
-        return cleanVariables(data.solution.primal_solution);
+    for (const candidate of candidates) {
+        const normalized = findDecisionVariables(candidate);
+        if (Object.keys(normalized).length > 0) {
+            return normalized;
+        }
     }
 
     return null;
 }
 
 export function cleanVariables(variables) {
-    if (!variables || typeof variables !== 'object') {
+    if (!variables || typeof variables !== 'object' || Array.isArray(variables)) {
         return {};
     }
 
-    const ignoredKeys = new Set([
-        'objective_value',
-        'constraints',
-        'node_id',
-        'parent_id',
-        'depth',
-    ]);
-
     return Object.entries(variables).reduce((accumulator, [key, value]) => {
-        if (!ignoredKeys.has(key)) {
+        if (/^[xy]\d+$/i.test(key)) {
             accumulator[key] = value;
         }
 
         return accumulator;
     }, {});
+}
+
+export function findDecisionVariables(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {};
+    }
+
+    const direct = cleanVariables(value);
+    if (Object.keys(direct).length > 0) {
+        return direct;
+    }
+
+    const nestedCandidates = [
+        value.solution,
+        value.variables,
+        value.primal_solution,
+        value.relaxed_solution,
+        value.integer_solution,
+        value.lp_solution,
+        value.ip_solution,
+        value.primal,
+        value.dual,
+        value.best_solution?.variables,
+        value.best_solution?.solution,
+        value.variables_result,
+        value.data,
+    ];
+
+    for (const nestedCandidate of nestedCandidates) {
+        const nested = findDecisionVariables(nestedCandidate);
+        if (Object.keys(nested).length > 0) {
+            return nested;
+        }
+    }
+
+    return {};
 }
 
 export function getOppositeOptimizationType(type) {
@@ -231,7 +281,7 @@ export function formatDualConstraint(constraint) {
 }
 
 export function formatVariableInline(variables) {
-    const entries = Object.entries(cleanVariables(variables || {}));
+    const entries = Object.entries(findDecisionVariables(variables || {}));
 
     return entries
         .map(([key, value]) => `${key} = ${formatNumber(value)}`)

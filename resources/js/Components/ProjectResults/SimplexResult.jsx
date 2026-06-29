@@ -1,4 +1,4 @@
-import {
+﻿import {
     buildDisplayRows,
     buildIterationHeaders,
     buildIterationRowLabels,
@@ -10,7 +10,7 @@ import {
 
 export default function SimplexResult({ data, savedSolution, project }) {
     const objectiveValue = data.objective_value ?? savedSolution?.z_value;
-    const iterations = Array.isArray(data.iterations) ? data.iterations : [];
+    const iterations = extractIterations(data);
 
     return (
         <div className="max-w-[64rem] space-y-9">
@@ -44,7 +44,9 @@ export default function SimplexResult({ data, savedSolution, project }) {
     );
 }
 
-function SimplexIteration({ iteration, project }) {
+function SimplexIteration({ iteration, project, columnNames }) {
+    const phaseLabel = iteration.phase_label || iteration.phase || '';
+
     return (
         <div>
             <div className="mb-4 flex items-center gap-4">
@@ -54,11 +56,19 @@ function SimplexIteration({ iteration, project }) {
 
                 <h2 className="font-inter text-xl font-black text-[#653018]">
                     Iteração {iteration.iteration || '-'}
+                    {phaseLabel ? (
+                        <span className="ml-3 text-sm font-semibold text-[#8a5b33]">
+                            {phaseLabel}
+                        </span>
+                    ) : null}
                 </h2>
             </div>
 
             {Array.isArray(iteration.tableau) && iteration.tableau.length > 0 ? (
-                <IterationTable matrix={iteration.tableau} project={project} />
+                <IterationTable
+                    matrix={iteration.tableau}
+                    project={project}
+                />
             ) : (
                 <SmallEmptyText text="Esta iteração não possui tabela registrada." />
             )}
@@ -170,4 +180,28 @@ function EmptyState({ title, description }) {
 
 function SmallEmptyText({ text }) {
     return <p className="text-sm leading-relaxed text-[#777777]">{text}</p>;
+}
+
+function extractIterations(data) {
+    const candidates = [
+        data?.iterations,
+        data?.iterations_history,
+        data?.variables_result?.iterations,
+        data?.variables_result?.iterations_history,
+        data?.result?.iterations,
+        data?.result?.iterations_history,
+        data?.solution?.iterations,
+        data?.solution?.iterations_history,
+        data?.data?.iterations,
+        data?.data?.iterations_history,
+        data?.saved_solution?.iterations,
+    ];
+
+    for (const candidate of candidates) {
+        if (Array.isArray(candidate) && candidate.length > 0) {
+            return candidate;
+        }
+    }
+
+    return [];
 }

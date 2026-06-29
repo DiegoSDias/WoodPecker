@@ -12,7 +12,10 @@ import {
 
 export default function DualResult({ data, savedSolution, project }) {
     const primalProject = data?.primal?.project || project;
-    const dualProblem = data?.dual?.problem || null;
+    const dualProblem = buildReadableDualProblem(
+        primalProject,
+        data?.dual?.problem || null
+    );
 
     const primalIterations = Array.isArray(data?.primal?.solution?.iterations)
         ? data.primal.solution.iterations
@@ -141,7 +144,9 @@ function DualProblemCard({
     const isPrimal = type === 'primal';
 
     const objectiveCoefficients = isPrimal
-        ? project?.objective_function?.coefficients || []
+        ? project?.objective_function?.coefficients ||
+          project?.objectiveFunction?.coefficients ||
+          []
         : problem?.objective_function?.coefficients || [];
 
     const constraints = isPrimal
@@ -149,7 +154,10 @@ function DualProblemCard({
         : problem?.constraints || [];
 
     const primalType =
-        project?.optimization_type || primalProject?.optimization_type;
+        project?.optimization_type?.value ||
+        project?.optimization_type ||
+        primalProject?.optimization_type?.value ||
+        primalProject?.optimization_type;
 
     const optimizationType = isPrimal
         ? primalType
@@ -218,6 +226,47 @@ function DualProblemCard({
             </div>
         </div>
     );
+}
+
+function buildReadableDualProblem(primalProject, dualProblem) {
+    if (!primalProject || !dualProblem) {
+        return dualProblem;
+    }
+
+    const primalConstraints = primalProject?.constraints || [];
+    const primalObjective =
+        primalProject?.objective_function?.coefficients ||
+        primalProject?.objectiveFunction?.coefficients ||
+        [];
+
+    if (primalConstraints.length === 0 || primalObjective.length === 0) {
+        return dualProblem;
+    }
+
+    const primalType =
+        primalProject?.optimization_type?.value ||
+        primalProject?.optimization_type ||
+        primalProject?.optimizationType?.value ||
+        primalProject?.optimizationType;
+    const dualOptimizationType = getOppositeOptimizationType(primalType);
+    const dualOperator = primalType === 'max' ? '>=' : '<=';
+
+    return {
+        ...dualProblem,
+        optimization_type: dualOptimizationType || dualProblem.optimization_type,
+        objective_function: {
+            coefficients: primalConstraints.map(
+                (constraint) => Number(constraint?.rhs_value) || 0
+            ),
+        },
+        constraints: primalObjective.map((_, variableIndex) => ({
+            coefficients: primalConstraints.map((constraint) =>
+                Number(constraint?.coefficients?.[variableIndex] ?? 0)
+            ),
+            operator: dualOperator,
+            rhs_value: Number(primalObjective[variableIndex] ?? 0),
+        })),
+    };
 }
 
 function DualSymbolCard({ label, imageSrc, value, valueClassName }) {

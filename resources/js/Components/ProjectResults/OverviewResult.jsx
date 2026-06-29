@@ -24,7 +24,8 @@ export default function OverviewResult({ project, solutions }) {
     const bestData = extractResultData(bestSolution);
 
     const objectiveValue = getObjectiveValue(bestSolution);
-    const variables = getOverviewVariables(bestData);
+    const variables =
+        getOverviewVariables(bestData) || getOverviewVariables(bestSolution);
 
     return (
         <div className="max-w-[58rem] space-y-9">

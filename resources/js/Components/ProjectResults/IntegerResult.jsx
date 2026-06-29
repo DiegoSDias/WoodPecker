@@ -23,9 +23,7 @@ export default function IntegerResult({
         ? simplexData.iterations
         : [];
 
-    const integerIterations = Array.isArray(data?.iterations)
-        ? data.iterations
-        : [];
+    const integerIterations = extractIterations(data);
 
     const iterationsToShow =
         simplexIterations.length > 0 ? simplexIterations : integerIterations;
@@ -253,4 +251,28 @@ function EmptyState({ title, description }) {
 
 function SmallEmptyText({ text }) {
     return <p className="text-sm leading-relaxed text-[#777777]">{text}</p>;
+}
+
+function extractIterations(data) {
+    const candidates = [
+        data?.iterations,
+        data?.iterations_history,
+        data?.variables_result?.iterations,
+        data?.variables_result?.iterations_history,
+        data?.result?.iterations,
+        data?.result?.iterations_history,
+        data?.solution?.iterations,
+        data?.solution?.iterations_history,
+        data?.data?.iterations,
+        data?.data?.iterations_history,
+        data?.summary?.iterations,
+    ];
+
+    for (const candidate of candidates) {
+        if (Array.isArray(candidate) && candidate.length > 0) {
+            return candidate;
+        }
+    }
+
+    return [];
 }

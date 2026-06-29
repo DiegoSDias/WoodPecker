@@ -37,11 +37,11 @@ class GraphicalMethodService
         $result = [
             'intersection_points' => $intersections,
             'vertices' => $orderedVertices,
-            'feasible_region' => $orderedVertices,
             'objective_line' => $this->buildObjectiveLine($objective, $optimal),
             'optimal_solution' => $optimal,
+            'solution' => $orderedVertices
         ];
-
+  
         $solution = $this->projectService->persistSolution(
             $project,
             'graphical',

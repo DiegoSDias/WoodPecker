@@ -41,8 +41,7 @@ class SensitivityAnalysisService
         );
 
         $analysis = [
-            // 'primal' => $primal,
-            // 'dual' => $dual,
+            'objective_value' => $primal['objective_value'] ?? null,
             'primal_solution' => $primal['solution'] ?? [],
             'shadow_prices' => $shadowPrices,
             'reduced_costs' => $primal['reduced_costs'] ?? [],

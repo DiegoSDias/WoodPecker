@@ -49,6 +49,7 @@ class BranchAndBoundService
             'best_solution' => $this->formatBestSolution($bestSolution),
             'best_path_ids' => $this->buildBestPathIds($iterations, $bestSolution['node_id'] ?? null),
             'iterations' => $iterations,
+            'solution' => $this->formatBestSolution($bestSolution)
         ];
 
         $solution = $this->projectService->persistSolution(

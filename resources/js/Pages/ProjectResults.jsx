@@ -105,14 +105,19 @@ export default function ProjectResults({ auth, projectId }) {
 
     async function handleTabClick(tab) {
         setActiveTab(tab.key);
+        setErrorMessage('');
 
         if (tab.type !== 'solve') {
             return;
         }
 
+        if (tab.key === 'graphical' && !canUseGraphicalMethod(project)) {
+            setLoadingMethod(null);
+            return;
+        }
+
         try {
             setLoadingMethod(tab.key);
-            setErrorMessage('');
 
             const response = await axios.post(
                 `/projects/${projectId}/solve/${tab.key}`
@@ -132,8 +137,7 @@ export default function ProjectResults({ auth, projectId }) {
             setSolutions(extractSolutions(refreshedSolutions.data));
         } catch (error) {
             setErrorMessage(
-                error?.response?.data?.message ||
-                    `Não foi possível executar o método ${tab.label}.`
+                getFriendlyMethodError(error, tab.key, tab.label, project)
             );
         } finally {
             setLoadingMethod(null);
@@ -208,6 +212,10 @@ function ResultContent({
         );
     }
 
+    if (activeTab === 'graphical') {
+        return <GraphicalResult data={resultData || {}} project={project} />;
+    }
+
     if (!resultData) {
         return (
             <EmptyState
@@ -225,10 +233,6 @@ function ResultContent({
                 project={project}
             />
         );
-    }
-
-    if (activeTab === 'graphical') {
-        return <GraphicalResult data={resultData} project={project} />;
     }
 
     if (activeTab === 'dual') {
@@ -266,5 +270,62 @@ function EmptyState({ title, description }) {
                 {description}
             </p>
         </div>
+    );
+}
+
+function getProjectVariableCount(project) {
+    const directCount = Number(project?.num_variables);
+
+    if (Number.isInteger(directCount) && directCount > 0) {
+        return directCount;
+    }
+
+    const objectiveCoefficients =
+        project?.objective_function?.coefficients ||
+        project?.objectiveFunction?.coefficients ||
+        project?.objective?.coefficients;
+
+    if (Array.isArray(objectiveCoefficients) && objectiveCoefficients.length > 0) {
+        return objectiveCoefficients.length;
+    }
+
+    const firstConstraintCoefficients = project?.constraints?.[0]?.coefficients;
+
+    if (
+        Array.isArray(firstConstraintCoefficients) &&
+        firstConstraintCoefficients.length > 0
+    ) {
+        return firstConstraintCoefficients.length;
+    }
+
+    return 0;
+}
+
+function canUseGraphicalMethod(project) {
+    return getProjectVariableCount(project) === 2;
+}
+
+function getFriendlyMethodError(error, methodKey, methodLabel, project) {
+    const backendMessage = error?.response?.data?.message;
+    const backendDetail =
+        error?.response?.data?.data?.detalhe ||
+        error?.response?.data?.detalhe ||
+        error?.response?.data?.errors?.detalhe;
+
+    if (methodKey === 'graphical' && !canUseGraphicalMethod(project)) {
+        return '';
+    }
+
+    if (
+        methodKey === 'graphical' &&
+        typeof backendDetail === 'string' &&
+        backendDetail.toLowerCase().includes('exatamente 2')
+    ) {
+        return '';
+    }
+
+    return (
+        backendMessage ||
+        `Não foi possível executar o método ${methodLabel}.`
     );
 }

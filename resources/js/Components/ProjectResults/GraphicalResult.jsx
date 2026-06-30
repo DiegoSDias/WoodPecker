@@ -302,26 +302,12 @@ function buildPlotTraces({
             fill: 'toself',
             fillcolor: GRAPH_COLORS.feasibleRegionFill,
             line: {
-                color: GRAPH_COLORS.feasibleRegion,
-                width: 3,
+                color: GRAPH_COLORS.feasibleRegionFill,
+                width: 0,
             },
             hovertemplate:
                 'Área viável<br>x1: %{x:.4f}<br>x2: %{y:.4f}<extra></extra>',
-            showlegend: false,
-        });
-
-        traces.push({
-            type: 'scatter',
-            mode: 'lines',
-            name: 'Área Viável',
-            x: [0, 1],
-            y: [0, 1],
-            line: {
-                color: GRAPH_COLORS.feasibleRegion,
-                width: 10,
-            },
-            hoverinfo: 'skip',
-            visible: 'legendonly',
+            showlegend: true,
         });
     }
 

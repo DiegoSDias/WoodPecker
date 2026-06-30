@@ -68,6 +68,10 @@ export default function IntegerResult({
                 getOverviewVariables(data)
         ) || {};
 
+    const relaxedVariablesText = formatVariableInline(relaxedVariables) || '-';
+    const integerVariablesText = formatVariableInline(integerVariables) || '-';
+    const relaxedSolutionIsInteger = hasOnlyIntegerValues(relaxedVariables);
+
     return (
         <div className="max-w-[64rem] space-y-10">
             <h1 className="font-inter text-[2.35rem] font-black leading-tight text-[#653018]">
@@ -145,12 +149,13 @@ export default function IntegerResult({
                                     </td>
 
                                     <td className="px-5 py-4 text-base font-medium text-[#2b211b]">
-                                        {formatVariableInline(relaxedVariables) ||
-                                            '-'}
+                                        {relaxedVariablesText}
                                     </td>
 
                                     <td className="px-5 py-4 text-base font-medium text-[#653018]">
-                                        Ótimo local
+                                        {relaxedSolutionIsInteger
+                                            ? 'Ótima e inteira'
+                                            : 'Ótima relaxada'}
                                     </td>
                                 </tr>
 
@@ -164,12 +169,11 @@ export default function IntegerResult({
                                     </td>
 
                                     <td className="px-5 py-4 text-base font-medium text-[#2b211b]">
-                                        {formatVariableInline(integerVariables) ||
-                                            '-'}
+                                        {integerVariablesText}
                                     </td>
 
                                     <td className="px-5 py-4 text-base font-semibold text-[#4cae62]">
-                                        Região Viável
+                                        Solução inteira ótima
                                     </td>
                                 </tr>
                             </tbody>
@@ -178,14 +182,27 @@ export default function IntegerResult({
                 </div>
 
                 <p className="mt-8 max-w-[58rem] text-base leading-relaxed text-[#2b211b]">
-                    A solução relaxada do problema produziu um valor ótimo de{' '}
-                    {formatNumber(relaxedObjective)}, porém com variáveis
-                    fracionárias. Aplicando o método Branch & Bound, foi
-                    encontrada a melhor solução inteira viável, com valor
-                    objetivo {formatNumber(integerObjective)}, correspondente a{' '}
-                    {formatVariableInline(integerVariables) || '-'}. A diferença
-                    entre as soluções representa o custo da restrição de
-                    integralidade.
+                    {relaxedSolutionIsInteger ? (
+                        <>
+                            A solução relaxada do problema já apresenta valores
+                            inteiros, com valor ótimo{' '}
+                            {formatNumber(relaxedObjective)} e variáveis{' '}
+                            {relaxedVariablesText}. Portanto, essa solução
+                            também atende à restrição de integralidade.
+                        </>
+                    ) : (
+                        <>
+                            A solução relaxada do problema produziu um valor
+                            ótimo de {formatNumber(relaxedObjective)}, porém com
+                            variáveis fracionárias. Aplicando o método Branch &
+                            Bound, foi encontrada a melhor solução inteira
+                            viável, com valor objetivo{' '}
+                            {formatNumber(integerObjective)}, correspondente a{' '}
+                            {integerVariablesText}. A diferença entre as
+                            soluções representa o custo da restrição de
+                            integralidade.
+                        </>
+                    )}
                 </p>
             </section>
         </div>
@@ -428,6 +445,17 @@ function buildVisibleHeaders(headers, rows) {
     }
 
     return visibleHeaders;
+}
+
+function hasOnlyIntegerValues(variables) {
+    const values = Object.values(variables || {})
+        .map(Number)
+        .filter(Number.isFinite);
+
+    return (
+        values.length > 0 &&
+        values.every((value) => Math.abs(value - Math.round(value)) <= 1e-6)
+    );
 }
 
 function EmptyState({ title, description }) {

@@ -97,6 +97,8 @@ export default function IntegerResult({
                             {Array.isArray(iteration.tableau) &&
                             iteration.tableau.length > 0 ? (
                                 <IterationTable
+                                    iteration={iteration}
+                                    nextIteration={iterationsToShow[index + 1]}
                                     matrix={iteration.tableau}
                                     project={project}
                                 />
@@ -190,60 +192,242 @@ export default function IntegerResult({
     );
 }
 
-function IterationTable({ matrix, project }) {
+function IterationTable({ iteration, nextIteration, matrix, project }) {
     const displayRows = buildDisplayRows(matrix);
-    const headers = buildIterationHeaders(displayRows, project);
+    const headers = buildVisibleHeaders(
+        buildIterationHeaders(displayRows, project),
+        displayRows
+    );
     const rowLabels = buildIterationRowLabels(displayRows);
+    const pivotRowIndex = getPivotIndex(
+        iteration?.pivot_row_index,
+        iteration?.pivot_row,
+        iteration?.pivotRowIndex,
+        iteration?.pivotRow,
+        nextIteration?.pivot_row_index,
+        nextIteration?.pivot_row,
+        nextIteration?.pivotRowIndex,
+        nextIteration?.pivotRow
+    );
+
+    const pivotColumnIndex = getPivotIndex(
+        iteration?.pivot_column_index,
+        iteration?.pivot_column,
+        iteration?.pivotColumnIndex,
+        iteration?.pivotColumn,
+        nextIteration?.pivot_column_index,
+        nextIteration?.pivot_column,
+        nextIteration?.pivotColumnIndex,
+        nextIteration?.pivotColumn
+    );
+
+    const pivotInfo = buildPivotInfo({
+        pivotRowIndex,
+        pivotColumnIndex,
+        rows: displayRows,
+        rowLabels,
+        headers,
+    });
 
     return (
-        <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-[42rem] border-collapse text-center">
-                    <thead className="bg-[#eadccb] font-inter text-xl font-black text-[#653018]">
-                        <tr>
-                            <th className="px-5 py-4">Base</th>
+        <div>
+            <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[42rem] border-collapse text-center">
+                        <thead className="bg-[#eadccb] font-inter text-xl font-black text-[#653018]">
+                            <tr>
+                                <th className="px-5 py-4">Base</th>
 
-                            {headers.map((header) => (
-                                <th key={header} className="px-5 py-4">
-                                    {header}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        {displayRows.map((row, rowIndex) => (
-                            <tr
-                                key={rowIndex}
-                                className="border-t border-[#eadccb]"
-                            >
-                                <td className="px-5 py-4 font-semibold text-[#111111]">
-                                    {rowLabels[rowIndex] === 'Z' ? (
-                                        <img
-                                            src="/images/white-z.png"
-                                            alt="Z"
-                                            className="mx-auto h-9 w-auto object-contain invert"
-                                        />
-                                    ) : (
-                                        rowLabels[rowIndex]
-                                    )}
-                                </td>
-
-                                {headers.map((_, columnIndex) => (
-                                    <td
-                                        key={columnIndex}
-                                        className="px-5 py-4 text-base font-medium text-[#111111]"
-                                    >
-                                        {formatNumber(row[columnIndex])}
-                                    </td>
+                                {headers.map((header) => (
+                                    <th key={header} className="px-5 py-4">
+                                        {header}
+                                    </th>
                                 ))}
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+
+                        <tbody>
+                            {displayRows.map((row, rowIndex) => (
+                                <tr
+                                    key={rowIndex}
+                                    className="border-t border-[#eadccb]"
+                                >
+                                    <td className="px-5 py-4 font-semibold text-[#111111]">
+                                        {rowLabels[rowIndex] === 'Z' ? (
+                                            <img
+                                                src="/images/white-z.png"
+                                                alt="Z"
+                                                className="mx-auto h-9 w-auto object-contain invert"
+                                            />
+                                        ) : (
+                                            rowLabels[rowIndex]
+                                        )}
+                                    </td>
+
+                                    {headers.map((_, columnIndex) => (
+                                        <td
+                                            key={columnIndex}
+                                            className={getCellClassName(
+                                                rowIndex,
+                                                columnIndex,
+                                                pivotRowIndex,
+                                                pivotColumnIndex,
+                                                displayRows
+                                            )}
+                                        >
+                                            {formatNumber(row[columnIndex])}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
+            <PivotMessage pivotInfo={pivotInfo} />
         </div>
     );
+}
+
+function PivotMessage({ pivotInfo }) {
+    return (
+        <p className="mt-3 max-w-[58rem] text-sm leading-relaxed text-[#653018]">
+            <span className="font-inter font-black">Pivô utilizado:</span>{' '}
+            {pivotInfo ? (
+                <>
+                    linha <span className="font-semibold">{pivotInfo.row}</span>,
+                    coluna{' '}
+                    <span className="font-semibold">{pivotInfo.column}</span>,
+                    valor{' '}
+                    <span className="font-semibold">
+                        {formatNumber(pivotInfo.value)}
+                    </span>
+                    .
+                </>
+            ) : (
+                'não informado nesta iteração.'
+            )}
+        </p>
+    );
+}
+
+function buildPivotInfo({
+    pivotRowIndex,
+    pivotColumnIndex,
+    rows,
+    rowLabels,
+    headers,
+}) {
+    const normalizedPivotRowIndex = normalizePivotRowIndex(
+        pivotRowIndex,
+        rows
+    );
+
+    const normalizedPivotColumnIndex =
+        normalizePivotColumnIndex(pivotColumnIndex);
+
+    if (
+        !Number.isInteger(normalizedPivotRowIndex) ||
+        !Number.isInteger(normalizedPivotColumnIndex)
+    ) {
+        return null;
+    }
+
+    const row = rows?.[normalizedPivotRowIndex];
+
+    if (!Array.isArray(row)) {
+        return null;
+    }
+
+    return {
+        row: rowLabels?.[normalizedPivotRowIndex] || '-',
+        column: headers?.[normalizedPivotColumnIndex] || '-',
+        value: row[normalizedPivotColumnIndex],
+    };
+}
+
+function getCellClassName(
+    rowIndex,
+    columnIndex,
+    pivotRowIndex,
+    pivotColumnIndex,
+    rows
+) {
+    const normalizedPivotRowIndex = normalizePivotRowIndex(
+        pivotRowIndex,
+        rows
+    );
+
+    const normalizedPivotColumnIndex =
+        normalizePivotColumnIndex(pivotColumnIndex);
+
+    const isPivotCell =
+        Number.isInteger(normalizedPivotRowIndex) &&
+        Number.isInteger(normalizedPivotColumnIndex) &&
+        rowIndex === normalizedPivotRowIndex &&
+        columnIndex === normalizedPivotColumnIndex;
+
+    return [
+        'px-5 py-4 text-base font-medium text-[#111111]',
+        isPivotCell ? 'bg-[#f4d8b6] font-black text-[#653018]' : '',
+    ]
+        .filter(Boolean)
+        .join(' ');
+}
+
+function getPivotIndex(...values) {
+    for (const value of values) {
+        const number = Number(value);
+
+        if (Number.isInteger(number) && number >= 0) {
+            return number;
+        }
+    }
+
+    return null;
+}
+
+function normalizePivotRowIndex(pivotRowIndex, rows) {
+    if (!Number.isInteger(pivotRowIndex)) {
+        return null;
+    }
+
+    const rowCount = Array.isArray(rows) ? rows.length : 0;
+
+    if (rowCount === 0) {
+        return pivotRowIndex;
+    }
+
+    if (pivotRowIndex >= 0 && pivotRowIndex < rowCount - 1) {
+        return pivotRowIndex + 1;
+    }
+
+    return pivotRowIndex;
+}
+
+function normalizePivotColumnIndex(pivotColumnIndex) {
+    if (!Number.isInteger(pivotColumnIndex)) {
+        return null;
+    }
+
+    return pivotColumnIndex;
+}
+
+function buildVisibleHeaders(headers, rows) {
+    const visibleHeaders = [...headers];
+    const rowLength = rows?.[0]?.length || 0;
+
+    if (rowLength > 0 && visibleHeaders.length === rowLength - 1) {
+        visibleHeaders.push('RHS');
+        return visibleHeaders;
+    }
+
+    if (visibleHeaders.length > 0) {
+        visibleHeaders[visibleHeaders.length - 1] = 'RHS';
+    }
+
+    return visibleHeaders;
 }
 
 function EmptyState({ title, description }) {

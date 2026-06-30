@@ -716,9 +716,9 @@ function normalizeRanges(source, project, shadowPrices) {
             row.decrease ??
             null,
     })).map((row) => {
-        const currentRhs = Number(row.currentRhs);
-        const allowableIncrease = Number(row.allowableIncrease);
-        const allowableDecrease = Number(row.allowableDecrease);
+        const currentRhs = parseOptionalNumber(row.currentRhs);
+        const allowableIncrease = parseOptionalNumber(row.allowableIncrease);
+        const allowableDecrease = parseOptionalNumber(row.allowableDecrease);
 
         return {
             ...row,
@@ -816,6 +816,16 @@ function normalizeArrayRows(value) {
     }
 
     return [];
+}
+
+function parseOptionalNumber(value) {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const number = Number(value);
+
+    return Number.isFinite(number) ? number : null;
 }
 
 function normalizeRestrictionList(value) {

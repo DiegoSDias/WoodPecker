@@ -15,6 +15,18 @@ export default function SimplexResult({ data, savedSolution, project }) {
         ? data.column_names
         : [];
 
+    function handleDownloadResult() {
+        const html = buildSimplexPrintHtml({
+            data,
+            project,
+            objectiveValue,
+            iterations,
+            columnNames,
+        });
+
+        openPrintWindow(html);
+    }
+
     return (
         <div className="max-w-[64rem] space-y-9">
             <h1 className="font-inter text-[2.35rem] font-black leading-tight text-[#653018]">
@@ -45,6 +57,26 @@ export default function SimplexResult({ data, savedSolution, project }) {
                 objectiveValue={objectiveValue}
                 project={project}
             />
+
+            <DownloadResultButton
+                disabled={iterations.length === 0}
+                onClick={handleDownloadResult}
+            />
+        </div>
+    );
+}
+
+function DownloadResultButton({ disabled, onClick }) {
+    return (
+        <div className="flex justify-end">
+            <button
+                type="button"
+                onClick={onClick}
+                disabled={disabled}
+                className="rounded-lg bg-[#733615] px-5 py-3 font-inter text-sm font-black text-white shadow-md transition hover:bg-[#5b2a10] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                Baixar PDF do Simplex
+            </button>
         </div>
     );
 }
@@ -411,6 +443,313 @@ function EmptyState({ title, description }) {
 
 function SmallEmptyText({ text }) {
     return <p className="text-sm leading-relaxed text-[#777777]">{text}</p>;
+}
+
+function buildSimplexPrintHtml({
+    data,
+    project,
+    objectiveValue,
+    iterations,
+    columnNames,
+}) {
+    const solution = data?.solution || {};
+    const variablesText = formatVariableInline(solution) || '-';
+    const projectName = project?.title || project?.name || '-';
+    const documentTitle = `${buildFileBaseName(
+        projectName
+    )}-resultado-simplex`;
+    const objectiveCoefficients =
+        project?.objective_function?.coefficients ||
+        project?.objectiveFunction?.coefficients ||
+        [];
+
+    const objectiveText =
+        objectiveCoefficients.length > 0
+            ? `${formatOptimizationType(project?.optimization_type)} Z = ${objectiveCoefficients
+                  .map((coefficient, index) =>
+                      formatTerm(coefficient, `x${index + 1}`, index)
+                  )
+                  .join(' ')}`
+            : '-';
+
+    const iterationSections = iterations.length
+        ? iterations.map((iteration, index) => {
+        const matrix = Array.isArray(iteration.tableau)
+            ? iteration.tableau
+            : [];
+        const displayRows = buildDisplayRows(matrix);
+        const baseHeaders =
+            Array.isArray(columnNames) && columnNames.length > 0
+                ? columnNames
+                : buildIterationHeaders(displayRows, project);
+        const headers = buildVisibleHeaders(baseHeaders, displayRows);
+        const rowLabels = buildIterationRowLabels(displayRows);
+        const pivotInfo = getIterationPivotInfo({
+            iteration,
+            nextIteration: iterations[index + 1],
+            rows: displayRows,
+            rowLabels,
+            headers,
+        });
+        const phaseLabel = formatPhaseLabel(
+            iteration.phase_label || iteration.phase || ''
+        );
+
+        return `
+            <section class="iteration">
+                <h3>Iteração ${escapeHtml(iteration.iteration || index + 1)}${
+            phaseLabel ? ` <span>${escapeHtml(phaseLabel)}</span>` : ''
+        }</h3>
+                ${
+                    displayRows.length > 0
+                        ? buildHtmlTable(headers, rowLabels, displayRows)
+                        : '<p>Esta iteração não possui tabela registrada.</p>'
+                }
+                <p class="pivot"><strong>Pivô utilizado:</strong> ${
+                    pivotInfo
+                        ? `linha ${escapeHtml(pivotInfo.row)}, coluna ${escapeHtml(
+                              pivotInfo.column
+                          )}, valor ${escapeHtml(formatNumber(pivotInfo.value))}.`
+                        : 'não há novo pivô nesta iteração.'
+                }</p>
+            </section>
+        `;
+    }).join('')
+        : '<p>Nenhuma iteração registrada.</p>';
+
+    return `<!doctype html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(documentTitle)}</title>
+        <style>
+            @page {
+                margin: 18mm;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                color: #2b211b;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 13px;
+                line-height: 1.45;
+                margin: 0;
+            }
+
+            h1,
+            h2,
+            h3 {
+                color: #653018;
+                margin: 0;
+            }
+
+            h1 {
+                font-size: 28px;
+                margin-bottom: 16px;
+            }
+
+            h2 {
+                font-size: 20px;
+                margin: 24px 0 10px;
+            }
+
+            h3 {
+                font-size: 16px;
+                margin: 18px 0 8px;
+            }
+
+            h3 span {
+                color: #8a5b33;
+                font-size: 12px;
+                margin-left: 8px;
+            }
+
+            .meta,
+            .summary {
+                background: #fffaf4;
+                border: 1px solid #eadccb;
+                border-radius: 8px;
+                margin-bottom: 18px;
+                padding: 12px 14px;
+            }
+
+            .meta p,
+            .summary p,
+            .pivot {
+                margin: 4px 0;
+            }
+
+            table {
+                border-collapse: collapse;
+                margin: 8px 0 10px;
+                page-break-inside: avoid;
+                width: 100%;
+            }
+
+            th,
+            td {
+                border: 1px solid #d9c7b4;
+                padding: 6px 7px;
+                text-align: center;
+                vertical-align: middle;
+            }
+
+            th {
+                background: #eadccb;
+                color: #653018;
+                font-weight: 700;
+            }
+
+            td:first-child {
+                font-weight: 700;
+            }
+
+            .pivot {
+                color: #653018;
+            }
+
+            .iteration {
+                page-break-inside: avoid;
+            }
+
+            .footer {
+                border-top: 1px solid #eadccb;
+                color: #777777;
+                font-size: 11px;
+                margin-top: 24px;
+                padding-top: 8px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Resultado do Método Simplex</h1>
+
+        <section class="meta">
+            <p><strong>Projeto:</strong> ${escapeHtml(projectName)}</p>
+            <p><strong>Tipo:</strong> ${escapeHtml(
+                formatOptimizationType(project?.optimization_type)
+            )}</p>
+            <p><strong>Valor ótimo:</strong> ${escapeHtml(
+                formatNumber(objectiveValue)
+            )}</p>
+            <p><strong>Variáveis:</strong> ${escapeHtml(variablesText)}</p>
+            <p><strong>Função objetivo:</strong> ${escapeHtml(objectiveText)}</p>
+        </section>
+
+        <h2>Iterações</h2>
+        ${iterationSections}
+
+        <section class="summary">
+            <h2>Resumo da Resolução</h2>
+            <p>O método Simplex encontrou o valor da função objetivo igual a ${escapeHtml(
+                formatNumber(objectiveValue)
+            )}${variablesText !== '-' ? `, com ${escapeHtml(variablesText)}.` : '.'}</p>
+        </section>
+
+        <p class="footer">Relatório gerado pelo sistema Woodpecker.</p>
+    </body>
+</html>`;
+}
+
+function getIterationPivotInfo({
+    nextIteration,
+    rows,
+    rowLabels,
+    headers,
+}) {
+    const pivotRowIndex = getPivotIndex(
+        nextIteration?.pivot_row_index,
+        nextIteration?.pivot_row,
+        nextIteration?.pivotRowIndex,
+        nextIteration?.pivotRow
+    );
+
+    const pivotColumnIndex = getPivotIndex(
+        nextIteration?.pivot_column_index,
+        nextIteration?.pivot_column,
+        nextIteration?.pivotColumnIndex,
+        nextIteration?.pivotColumn
+    );
+
+    return buildPivotInfo({
+        pivotRowIndex,
+        pivotColumnIndex,
+        rows,
+        rowLabels,
+        headers,
+    });
+}
+
+function buildHtmlTable(headers, rowLabels, rows) {
+    const tableHeaders = ['Base', ...headers];
+    const body = rows.map((row, rowIndex) => [
+        rowLabels[rowIndex] || '-',
+        ...headers.map((_, columnIndex) => formatNumber(row[columnIndex])),
+    ]);
+
+    return `
+        <table>
+            <thead>
+                <tr>
+                    ${tableHeaders
+                        .map((header) => `<th>${escapeHtml(header)}</th>`)
+                        .join('')}
+                </tr>
+            </thead>
+            <tbody>
+                ${body
+                    .map(
+                        (row) => `
+                            <tr>
+                                ${row
+                                    .map((cell) => `<td>${escapeHtml(cell)}</td>`)
+                                    .join('')}
+                            </tr>
+                        `
+                    )
+                    .join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '-')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function openPrintWindow(html) {
+    const printWindow = window.open('', '_blank');
+
+    if (!printWindow) {
+        return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+    }, 250);
+}
+
+function buildFileBaseName(value) {
+    return String(value || 'resultado')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 80);
 }
 
 function extractIterations(data) {

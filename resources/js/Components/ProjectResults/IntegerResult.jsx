@@ -9,6 +9,13 @@ import {
     getLatestSolutionByMethod,
     getOverviewVariables,
 } from './projectResultsUtils';
+import {
+    buildFileBaseName,
+    buildPrintDocument,
+    buildPrintTable,
+    escapeHtml,
+    openPrintWindow,
+} from './resultPdfUtils';
 
 export default function IntegerResult({
     data,
@@ -71,6 +78,20 @@ export default function IntegerResult({
     const relaxedVariablesText = formatVariableInline(relaxedVariables) || '-';
     const integerVariablesText = formatVariableInline(integerVariables) || '-';
     const relaxedSolutionIsInteger = hasOnlyIntegerValues(relaxedVariables);
+
+    function handleDownloadPdf() {
+        const html = buildIntegerPrintHtml({
+            project,
+            iterations: iterationsToShow,
+            relaxedObjective,
+            integerObjective,
+            relaxedVariablesText,
+            integerVariablesText,
+            relaxedSolutionIsInteger,
+        });
+
+        openPrintWindow(html);
+    }
 
     return (
         <div className="max-w-[64rem] space-y-10">
@@ -205,6 +226,26 @@ export default function IntegerResult({
                     )}
                 </p>
             </section>
+
+            <DownloadPdfButton
+                disabled={iterationsToShow.length === 0}
+                onClick={handleDownloadPdf}
+            />
+        </div>
+    );
+}
+
+function DownloadPdfButton({ disabled, onClick }) {
+    return (
+        <div className="flex justify-end">
+            <button
+                type="button"
+                onClick={onClick}
+                disabled={disabled}
+                className="rounded-lg bg-[#733615] px-5 py-3 font-inter text-sm font-black text-white shadow-md transition hover:bg-[#5b2a10] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                Baixar PDF da Solução Inteira
+            </button>
         </div>
     );
 }
@@ -466,6 +507,140 @@ function EmptyState({ title, description }) {
 
 function SmallEmptyText({ text }) {
     return <p className="text-sm leading-relaxed text-[#777777]">{text}</p>;
+}
+
+function buildIntegerPrintHtml({
+    project,
+    iterations,
+    relaxedObjective,
+    integerObjective,
+    relaxedVariablesText,
+    integerVariablesText,
+    relaxedSolutionIsInteger,
+}) {
+    const projectName = project?.title || project?.name || '-';
+    const iterationsHtml = iterations.length
+        ? iterations
+              .map((iteration, index) =>
+                  buildIntegerIterationPrintHtml({
+                      iteration,
+                      nextIteration: iterations[index + 1],
+                      project,
+                      index,
+                  })
+              )
+              .join('')
+        : '<p>Nenhuma iteração registrada.</p>';
+    const solutionRows = [
+        [
+            'Relaxada (LP)',
+            formatNumber(relaxedObjective),
+            relaxedVariablesText,
+            relaxedSolutionIsInteger ? 'Ótima e inteira' : 'Ótima relaxada',
+        ],
+        [
+            'Inteira (IP)',
+            formatNumber(integerObjective),
+            integerVariablesText,
+            'Solução inteira ótima',
+        ],
+    ];
+    const contentHtml = `
+        <h2>Iterações</h2>
+        ${iterationsHtml}
+
+        <h2>Solução</h2>
+        ${buildPrintTable(
+            ['Tipo de Solução', 'Valor Z', 'Variáveis', 'Status'],
+            solutionRows
+        )}
+    `;
+    const summaryHtml = `
+        <h2>Resumo da Resolução</h2>
+        <p>${
+            relaxedSolutionIsInteger
+                ? `A solução relaxada do problema já apresenta valores inteiros, com valor ótimo ${escapeHtml(
+                      formatNumber(relaxedObjective)
+                  )} e variáveis ${escapeHtml(relaxedVariablesText)}.`
+                : `A solução relaxada produziu valor ótimo ${escapeHtml(
+                      formatNumber(relaxedObjective)
+                  )}, porém com variáveis fracionárias. O Branch & Bound encontrou a melhor solução inteira viável com valor objetivo ${escapeHtml(
+                      formatNumber(integerObjective)
+                  )}, correspondente a ${escapeHtml(integerVariablesText)}.`
+        }</p>
+    `;
+
+    return buildPrintDocument({
+        documentTitle: `${buildFileBaseName(projectName)}-integer-solution`,
+        title: 'Resultado da Solução Inteira',
+        metaRows: [
+            ['Projeto', projectName],
+            ['Valor relaxado', formatNumber(relaxedObjective)],
+            ['Variáveis relaxadas', relaxedVariablesText],
+            ['Valor inteiro', formatNumber(integerObjective)],
+            ['Variáveis inteiras', integerVariablesText],
+        ],
+        contentHtml,
+        summaryHtml,
+    });
+}
+
+function buildIntegerIterationPrintHtml({
+    iteration,
+    nextIteration,
+    project,
+    index,
+}) {
+    const matrix = Array.isArray(iteration.tableau) ? iteration.tableau : [];
+    const displayRows = buildDisplayRows(matrix);
+    const headers = buildVisibleHeaders(
+        buildIterationHeaders(displayRows, project),
+        displayRows
+    );
+    const rowLabels = buildIterationRowLabels(displayRows);
+    const pivotInfo = buildPivotInfo({
+        pivotRowIndex: getPivotIndex(
+            nextIteration?.pivot_row_index,
+            nextIteration?.pivot_row,
+            nextIteration?.pivotRowIndex,
+            nextIteration?.pivotRow
+        ),
+        pivotColumnIndex: getPivotIndex(
+            nextIteration?.pivot_column_index,
+            nextIteration?.pivot_column,
+            nextIteration?.pivotColumnIndex,
+            nextIteration?.pivotColumn
+        ),
+        rows: displayRows,
+        rowLabels,
+        headers,
+    });
+
+    return `
+        <section class="iteration">
+            <h3>Iteração ${escapeHtml(iteration.iteration || index + 1)}</h3>
+            ${
+                displayRows.length > 0
+                    ? buildPrintTable(
+                          ['Base', ...headers],
+                          displayRows.map((row, rowIndex) => [
+                              rowLabels[rowIndex] || '-',
+                              ...headers.map((_, columnIndex) =>
+                                  formatNumber(row[columnIndex])
+                              ),
+                          ])
+                      )
+                    : '<p>Esta iteração não possui tabela registrada.</p>'
+            }
+            <p class="pivot"><strong>Pivô utilizado:</strong> ${
+                pivotInfo
+                    ? `linha ${escapeHtml(pivotInfo.row)}, coluna ${escapeHtml(
+                          pivotInfo.column
+                      )}, valor ${escapeHtml(formatNumber(pivotInfo.value))}.`
+                    : 'não há novo pivô nesta iteração.'
+            }</p>
+        </section>
+    `;
 }
 
 function extractIterations(data) {

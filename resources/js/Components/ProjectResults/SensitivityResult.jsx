@@ -6,6 +6,13 @@ import {
     getObjectiveValue,
     getOverviewVariables,
 } from './projectResultsUtils';
+import {
+    buildFileBaseName,
+    buildPrintDocument,
+    buildPrintTable,
+    escapeHtml,
+    openPrintWindow,
+} from './resultPdfUtils';
 
 export default function SensitivityResult({
     data = {},
@@ -33,6 +40,15 @@ export default function SensitivityResult({
                 </div>
             </div>
         );
+    }
+
+    function handleDownloadPdf() {
+        const html = buildSensitivityPrintHtml({
+            data: sensitivityData,
+            project,
+        });
+
+        openPrintWindow(html);
     }
 
     return (
@@ -160,6 +176,22 @@ export default function SensitivityResult({
                     {sensitivityData.summary}
                 </p>
             </section>
+
+            <DownloadPdfButton onClick={handleDownloadPdf} />
+        </div>
+    );
+}
+
+function DownloadPdfButton({ onClick }) {
+    return (
+        <div className="flex justify-end">
+            <button
+                type="button"
+                onClick={onClick}
+                className="rounded-lg bg-[#733615] px-5 py-3 font-inter text-sm font-black text-white shadow-md transition hover:bg-[#5b2a10]"
+            >
+                Baixar PDF da Análise
+            </button>
         </div>
     );
 }
@@ -335,6 +367,110 @@ function StatusText({ children, active }) {
             {children}
         </span>
     );
+}
+
+function buildSensitivityPrintHtml({ data, project }) {
+    const projectName = project?.title || project?.name || '-';
+    const variablesText =
+        data.optimalVariables.length > 0
+            ? data.optimalVariables
+                  .map(
+                      ([variable, value]) =>
+                          `${normalizeVariableName(variable)} = ${formatNumber(
+                              value
+                          )}`
+                  )
+                  .join(', ')
+            : '-';
+    const activeRestrictionsText =
+        data.activeRestrictions.length > 0
+            ? data.activeRestrictions
+                  .map((item, index) => normalizeRestrictionName(item, index))
+                  .join(', ')
+            : '-';
+    const slackRestrictionsText =
+        data.slackRestrictions.length > 0
+            ? data.slackRestrictions
+                  .map((item, index) => normalizeRestrictionName(item, index))
+                  .join(', ')
+            : '-';
+    const contentHtml = `
+        <h2>Preço Sombra</h2>
+        ${buildPrintTable(
+            ['Restrição', 'Preço Sombra', 'Status'],
+            data.shadowPrices.map((row, index) => [
+                normalizeRestrictionName(row.restriction, index),
+                formatNumber(row.shadowPrice),
+                row.status || '-',
+            ])
+        )}
+
+        <h2>Custos Reduzidos</h2>
+        ${buildPrintTable(
+            ['Variável', 'Valor', 'Custo Reduzido', 'Interpretação'],
+            data.reducedCosts.map((row, index) => [
+                normalizeVariableName(row.variable, index),
+                formatNumber(row.value),
+                formatNumber(row.reducedCost),
+                row.interpretation || '-',
+            ])
+        )}
+
+        <h2>Intervalos dos Coeficientes</h2>
+        ${buildPrintTable(
+            [
+                'Variável',
+                'Coeficiente Atual',
+                'Custo Reduzido',
+                'Aumento Permitido',
+                'Redução Permitida',
+            ],
+            data.objectiveRanges.map((row, index) => [
+                normalizeVariableName(row.variable, index),
+                formatNumber(row.currentCoefficient),
+                formatNumber(row.reducedCost),
+                formatLimitNumber(row.allowableIncrease),
+                formatLimitNumber(row.allowableDecrease),
+            ])
+        )}
+
+        <h2>Intervalos de Sensibilidade</h2>
+        ${buildPrintTable(
+            ['Restrição', 'RHS Atual', 'Mínimo', 'Máximo', 'Folga'],
+            data.ranges.map((row, index) => [
+                normalizeRestrictionName(row.restriction, index),
+                formatNumber(row.currentRhs),
+                formatLimitNumber(row.minimum),
+                formatLimitNumber(row.maximum),
+                formatNumber(row.slack),
+            ])
+        )}
+    `;
+    const summaryHtml = `
+        <h2>Resumo da Resolução</h2>
+        <p>${escapeHtml(data.summary)}</p>
+    `;
+
+    return buildPrintDocument({
+        documentTitle: `${buildFileBaseName(projectName)}-sensitivity-analysis`,
+        title: 'Resultado da Análise de Sensibilidade',
+        metaRows: [
+            ['Projeto', projectName],
+            [
+                'Tipo',
+                formatOptimizationType(
+                    project?.optimization_type?.value ||
+                        project?.optimization_type
+                ),
+            ],
+            ['Valor ótimo atual', formatNumber(data.objectiveValue)],
+            ['Variáveis ótimas', variablesText],
+            ['Restrições ativas', activeRestrictionsText],
+            ['Restrições com folga', slackRestrictionsText],
+        ],
+        contentHtml,
+        summaryHtml,
+    });
 }
 
 function normalizeSensitivityData(data, project, solutions) {

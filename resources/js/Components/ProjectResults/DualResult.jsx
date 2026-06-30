@@ -9,6 +9,13 @@ import {
     formatTerm,
     getOppositeOptimizationType,
 } from './projectResultsUtils';
+import {
+    buildFileBaseName,
+    buildPrintDocument,
+    buildPrintTable,
+    escapeHtml,
+    openPrintWindow,
+} from './resultPdfUtils';
 
 export default function DualResult({ data, savedSolution, project }) {
     const primalProject = data?.primal?.project || project;
@@ -49,6 +56,21 @@ export default function DualResult({ data, savedSolution, project }) {
         data?.dual?.solution?.objective_value ??
         data?.solution?.objective_value ??
         savedSolution?.z_value;
+
+    function handleDownloadPdf() {
+        const html = buildDualPrintHtml({
+            primalProject,
+            dualProblem,
+            primalIterations,
+            dualIterations,
+            primalColumnNames,
+            dualColumnNames,
+            primalObjectiveValue,
+            dualObjectiveValue,
+        });
+
+        openPrintWindow(html);
+    }
 
     return (
         <div className="max-w-[64rem] space-y-8">
@@ -155,6 +177,28 @@ export default function DualResult({ data, savedSolution, project }) {
                     </p>
                 </div>
             </section>
+
+            <DownloadPdfButton
+                disabled={
+                    primalIterations.length === 0 && dualIterations.length === 0
+                }
+                onClick={handleDownloadPdf}
+            />
+        </div>
+    );
+}
+
+function DownloadPdfButton({ disabled, onClick }) {
+    return (
+        <div className="flex justify-end">
+            <button
+                type="button"
+                onClick={onClick}
+                disabled={disabled}
+                className="rounded-lg bg-[#733615] px-5 py-3 font-inter text-sm font-black text-white shadow-md transition hover:bg-[#5b2a10] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                Baixar PDF do Dual
+            </button>
         </div>
     );
 }
@@ -651,4 +695,200 @@ function EmptyState({ title, description }) {
 
 function SmallEmptyText({ text }) {
     return <p className="text-sm leading-relaxed text-[#777777]">{text}</p>;
+}
+
+function buildDualPrintHtml({
+    primalProject,
+    dualProblem,
+    primalIterations,
+    dualIterations,
+    primalColumnNames,
+    dualColumnNames,
+    primalObjectiveValue,
+    dualObjectiveValue,
+}) {
+    const projectName = primalProject?.title || primalProject?.name || '-';
+    const contentHtml = `
+        <h2>Modelos</h2>
+        <section class="problem-grid">
+            ${buildProblemCardHtml({
+                title: 'Primal (Original)',
+                type: 'primal',
+                project: primalProject,
+            })}
+            ${buildProblemCardHtml({
+                title: 'Dual (Transposto)',
+                type: 'dual',
+                project: primalProject,
+                problem: dualProblem,
+            })}
+        </section>
+
+        <h2>Iteração Dual</h2>
+        ${buildIterationListHtml({
+            iterations: dualIterations,
+            project: dualProblem || primalProject,
+            columnNames: dualColumnNames,
+        })}
+
+        <h2>Iteração Primal</h2>
+        ${buildIterationListHtml({
+            iterations: primalIterations,
+            project: primalProject,
+            columnNames: primalColumnNames,
+        })}
+    `;
+
+    const summaryHtml = `
+        <h2>Resumo da Resolução</h2>
+        <p>O problema dual produziu o mesmo valor ótimo do problema primal (Z* = ${escapeHtml(
+            formatNumber(primalObjectiveValue)
+        )} e W* = ${escapeHtml(
+        formatNumber(dualObjectiveValue)
+    )}), confirmando o Teorema da Dualidade Forte da Programação Linear.</p>
+    `;
+
+    return buildPrintDocument({
+        documentTitle: `${buildFileBaseName(projectName)}-resultado-dual`,
+        title: 'Resultado do Problema Dual',
+        metaRows: [
+            ['Projeto', projectName],
+            ['Valor ótimo primal', formatNumber(primalObjectiveValue)],
+            ['Valor ótimo dual', formatNumber(dualObjectiveValue)],
+        ],
+        contentHtml,
+        summaryHtml,
+    });
+}
+
+function buildProblemCardHtml({ title, type, project, problem }) {
+    const isPrimal = type === 'primal';
+    const objectiveCoefficients = isPrimal
+        ? project?.objective_function?.coefficients ||
+          project?.objectiveFunction?.coefficients ||
+          []
+        : problem?.objective_function?.coefficients || [];
+    const constraints = isPrimal ? project?.constraints || [] : problem?.constraints || [];
+    const primalType =
+        project?.optimization_type?.value ||
+        project?.optimization_type ||
+        project?.optimizationType?.value ||
+        project?.optimizationType;
+    const optimizationType = isPrimal
+        ? primalType
+        : problem?.optimization_type || getOppositeOptimizationType(primalType);
+    const variablePrefix = isPrimal ? 'x' : 'y';
+    const objectiveLetter = isPrimal ? 'Z' : 'W';
+    const objectiveText =
+        objectiveCoefficients.length > 0
+            ? `${formatOptimizationTypeShort(optimizationType)}. ${objectiveLetter} = ${objectiveCoefficients
+                  .map((coefficient, index) =>
+                      formatTerm(coefficient, `${variablePrefix}${index + 1}`, index)
+                  )
+                  .join(' ')}`
+            : 'Não há função objetivo registrada.';
+    const constraintTexts = constraints.length
+        ? constraints.map((constraint) =>
+              isPrimal
+                  ? formatConstraint(constraint)
+                  : formatDualConstraint(constraint)
+          )
+        : ['Não há restrições registradas.'];
+
+    return `
+        <section class="problem-card">
+            <h3>${escapeHtml(title)}</h3>
+            <p><strong>Função objetivo:</strong> ${escapeHtml(objectiveText)}</p>
+            <p><strong>Sujeito a:</strong></p>
+            ${constraintTexts
+                .map((constraintText) => `<p>${escapeHtml(constraintText)}</p>`)
+                .join('')}
+        </section>
+    `;
+}
+
+function buildIterationListHtml({ iterations, project, columnNames }) {
+    if (!iterations.length) {
+        return '<p>Nenhuma iteração registrada.</p>';
+    }
+
+    return iterations
+        .map((iteration, index) => {
+            const matrix = Array.isArray(iteration.tableau)
+                ? iteration.tableau
+                : [];
+            const displayRows = buildDisplayRows(matrix);
+            const baseHeaders =
+                Array.isArray(columnNames) && columnNames.length > 0
+                    ? columnNames
+                    : buildIterationHeaders(displayRows, project);
+            const headers = buildVisibleHeaders(baseHeaders, displayRows);
+            const rowLabels = buildIterationRowLabels(displayRows);
+            const phaseLabel = formatPhaseLabel(
+                iteration?.phase_label || iteration?.phase || ''
+            );
+            const pivotInfo = getIterationPivotInfo({
+                nextIteration: iterations[index + 1],
+                rows: displayRows,
+                rowLabels,
+                headers,
+            });
+
+            return `
+                <section class="iteration">
+                    <h3>Iteração ${escapeHtml(iteration.iteration || index + 1)}${
+                phaseLabel ? ` <span>${escapeHtml(phaseLabel)}</span>` : ''
+            }</h3>
+                    ${
+                        displayRows.length > 0
+                            ? buildPrintTable(
+                                  ['Base', ...headers],
+                                  displayRows.map((row, rowIndex) => [
+                                      rowLabels[rowIndex] || '-',
+                                      ...headers.map((_, columnIndex) =>
+                                          formatNumber(row[columnIndex])
+                                      ),
+                                  ])
+                              )
+                            : '<p>Esta iteração não possui tabela registrada.</p>'
+                    }
+                    <p class="pivot"><strong>Pivô utilizado:</strong> ${
+                        pivotInfo
+                            ? `linha ${escapeHtml(
+                                  pivotInfo.row
+                              )}, coluna ${escapeHtml(
+                                  pivotInfo.column
+                              )}, valor ${escapeHtml(
+                                  formatNumber(pivotInfo.value)
+                              )}.`
+                            : 'não há novo pivô nesta iteração.'
+                    }</p>
+                </section>
+            `;
+        })
+        .join('');
+}
+
+function getIterationPivotInfo({ nextIteration, rows, rowLabels, headers }) {
+    const pivotRowIndex = getPivotIndex(
+        nextIteration?.pivot_row_index,
+        nextIteration?.pivot_row,
+        nextIteration?.pivotRowIndex,
+        nextIteration?.pivotRow
+    );
+
+    const pivotColumnIndex = getPivotIndex(
+        nextIteration?.pivot_column_index,
+        nextIteration?.pivot_column,
+        nextIteration?.pivotColumnIndex,
+        nextIteration?.pivotColumn
+    );
+
+    return buildPivotInfo({
+        pivotRowIndex,
+        pivotColumnIndex,
+        rows,
+        rowLabels,
+        headers,
+    });
 }

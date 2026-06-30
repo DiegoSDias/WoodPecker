@@ -12,6 +12,13 @@ import {
     getObjectiveValue,
     getOverviewVariables,
 } from './projectResultsUtils';
+import {
+    buildFileBaseName,
+    buildPrintDocument,
+    buildPrintTable,
+    escapeHtml,
+    openPrintWindow,
+} from './resultPdfUtils';
 
 export default function OverviewResult({ project, solutions }) {
     const objectiveCoefficients =
@@ -26,6 +33,20 @@ export default function OverviewResult({ project, solutions }) {
     const objectiveValue = getObjectiveValue(bestSolution);
     const variables =
         getOverviewVariables(bestData) || getOverviewVariables(bestSolution);
+
+    function handleDownloadPdf() {
+        const html = buildOverviewPrintHtml({
+            project,
+            solution: bestSolution,
+            data: bestData,
+            objectiveValue,
+            variables,
+            constraints,
+            objectiveCoefficients,
+        });
+
+        openPrintWindow(html);
+    }
 
     return (
         <div className="max-w-[58rem] space-y-9">
@@ -79,6 +100,26 @@ export default function OverviewResult({ project, solutions }) {
                 variables={variables}
                 objectiveCoefficients={objectiveCoefficients}
             />
+
+            <DownloadPdfButton
+                disabled={!bestSolution}
+                onClick={handleDownloadPdf}
+            />
+        </div>
+    );
+}
+
+function DownloadPdfButton({ disabled, onClick }) {
+    return (
+        <div className="flex justify-end">
+            <button
+                type="button"
+                onClick={onClick}
+                disabled={disabled}
+                className="rounded-lg bg-[#733615] px-5 py-3 font-inter text-sm font-black text-white shadow-md transition hover:bg-[#5b2a10] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                Baixar PDF da Visão Geral
+            </button>
         </div>
     );
 }
@@ -345,4 +386,76 @@ function EmptyState({ title, description }) {
 
 function SmallEmptyText({ text }) {
     return <p className="text-sm leading-relaxed text-[#777777]">{text}</p>;
+}
+
+function buildOverviewPrintHtml({
+    project,
+    solution,
+    data,
+    objectiveValue,
+    variables,
+    constraints,
+    objectiveCoefficients,
+}) {
+    const projectName = project?.title || project?.name || '-';
+    const cleanDecisionVariables = cleanVariables(variables || {});
+    const variablesRows = Object.entries(cleanDecisionVariables).map(
+        ([variable, value]) => [variable.toUpperCase(), formatNumber(value)]
+    );
+    const restrictionsRows = constraints.map((constraint, index) => [
+        `R${index + 1}`,
+        formatConstraint(constraint),
+    ]);
+    const objectiveText =
+        objectiveCoefficients.length > 0
+            ? `${formatOptimizationType(project?.optimization_type)} Z = ${objectiveCoefficients
+                  .map((coefficient, index) =>
+                      formatTerm(coefficient, `x${index + 1}`, index)
+                  )
+                  .join(' ')}`
+            : '-';
+    const variablesText =
+        variablesRows.length > 0
+            ? formatVariableInline(cleanDecisionVariables)
+            : '-';
+    const contentHtml = `
+        <h2>Variáveis de Decisão</h2>
+        ${
+            variablesRows.length > 0
+                ? buildPrintTable(['Variável', 'Valor'], variablesRows)
+                : '<p>Não há variáveis de decisão registradas.</p>'
+        }
+
+        <h2>Restrições</h2>
+        ${
+            restrictionsRows.length > 0
+                ? buildPrintTable(['Restrição', 'Expressão'], restrictionsRows)
+                : '<p>Não há restrições registradas.</p>'
+        }
+    `;
+    const summaryHtml = `
+        <h2>Resumo da Resolução</h2>
+        <p>Foi encontrada uma solução pelo método ${escapeHtml(
+            formatMethodName(solution?.method_used)
+        )} para o problema de ${escapeHtml(
+        formatOptimizationType(project?.optimization_type).toLowerCase()
+    )}. O valor da função objetivo é ${escapeHtml(
+        formatNumber(objectiveValue)
+    )}${variablesText !== '-' ? `, com ${escapeHtml(variablesText)}.` : '.'}</p>
+    `;
+
+    return buildPrintDocument({
+        documentTitle: `${buildFileBaseName(projectName)}-visao-geral`,
+        title: 'Resultado da Visão Geral',
+        metaRows: [
+            ['Projeto', projectName],
+            ['Tipo', formatOptimizationType(project?.optimization_type)],
+            ['Método', formatMethodName(solution?.method_used)],
+            ['Status', formatOverviewStatus(solution, data)],
+            ['Valor ótimo', formatNumber(objectiveValue)],
+            ['Função objetivo', objectiveText],
+        ],
+        contentHtml,
+        summaryHtml,
+    });
 }

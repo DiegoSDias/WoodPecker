@@ -60,7 +60,10 @@ class SensitivityAnalysisService
 
         $objectiveRangeRows = $this->buildObjectiveRanges(
             $project->objectiveFunction->coefficients,
-            $primal['reduced_costs'] ?? []
+            $primal['reduced_costs'] ?? [],
+            $constraints,
+            $primal['solution'] ?? [],
+            $project->optimization_type->value
         );
 
         $rhsRangeRows = $this->buildRhsRangeRows(
@@ -149,8 +152,25 @@ class SensitivityAnalysisService
         return $values;
     }
 
-    private function buildObjectiveRanges(array $coefficients, array $reducedCosts): array
+    private function buildObjectiveRanges(
+        array $coefficients,
+        array $reducedCosts,
+        array $constraints,
+        array $solution,
+        string $optimizationType
+    ): array
     {
+        $twoVariableRanges = $this->buildTwoVariableObjectiveRanges(
+            $coefficients,
+            $constraints,
+            $solution,
+            $optimizationType
+        );
+
+        if (! empty($twoVariableRanges)) {
+            return $twoVariableRanges;
+        }
+
         $ranges = [];
 
         foreach ($coefficients as $index => $value) {
@@ -161,12 +181,128 @@ class SensitivityAnalysisService
                 'variable' => strtoupper($name),
                 'current_coefficient' => $this->roundNumber((float) $value),
                 'reduced_cost' => $this->roundNumber($reducedCost),
-                'allowable_increase' => $this->roundNumber(abs($reducedCost)),
-                'allowable_decrease' => $this->roundNumber(abs($reducedCost)),
+                'allowable_increase' => abs($reducedCost) > self::EPSILON
+                    ? $this->roundNumber(abs($reducedCost))
+                    : null,
+                'allowable_decrease' => abs($reducedCost) > self::EPSILON
+                    ? $this->roundNumber(abs($reducedCost))
+                    : null,
             ];
         }
 
         return $ranges;
+    }
+
+    private function buildTwoVariableObjectiveRanges(
+        array $coefficients,
+        array $constraints,
+        array $solution,
+        string $optimizationType
+    ): array {
+        if (
+            count($coefficients) !== 2
+            || ! isset($solution['x1'], $solution['x2'])
+        ) {
+            return [];
+        }
+
+        $vertices = $this->buildFeasibleVertices($constraints);
+
+        if (empty($vertices)) {
+            return [];
+        }
+
+        $currentPoint = [
+            (float) $solution['x1'],
+            (float) $solution['x2'],
+        ];
+
+        $rows = [];
+
+        foreach ($coefficients as $targetIndex => $coefficient) {
+            $range = $this->calculateObjectiveCoefficientRange(
+                $coefficients,
+                $vertices,
+                $currentPoint,
+                $targetIndex,
+                $optimizationType
+            );
+
+            if ($range === null) {
+                return [];
+            }
+
+            $currentCoefficient = (float) $coefficient;
+            $minimum = $range['minimum'];
+            $maximum = $range['maximum'];
+
+            $rows['x' . ($targetIndex + 1)] = [
+                'variable' => 'X' . ($targetIndex + 1),
+                'current_coefficient' => $this->roundNumber($currentCoefficient),
+                'reduced_cost' => 0.0,
+                'allowable_increase' => $maximum === null
+                    ? null
+                    : $this->roundNullableNumber($maximum - $currentCoefficient),
+                'allowable_decrease' => $minimum === null
+                    ? null
+                    : $this->roundNullableNumber($currentCoefficient - $minimum),
+                'minimum' => $this->roundNullableNumber($minimum),
+                'maximum' => $this->roundNullableNumber($maximum),
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function calculateObjectiveCoefficientRange(
+        array $coefficients,
+        array $vertices,
+        array $currentPoint,
+        int $targetIndex,
+        string $optimizationType
+    ): ?array {
+        $lower = -INF;
+        $upper = INF;
+        $otherIndex = $targetIndex === 0 ? 1 : 0;
+
+        foreach ($vertices as $vertex) {
+            $a = $currentPoint[$targetIndex] - (float) $vertex[$targetIndex];
+            $b = ((float) $coefficients[$otherIndex] * (float) $vertex[$otherIndex])
+                - ((float) $coefficients[$otherIndex] * $currentPoint[$otherIndex]);
+
+            if (abs($a) <= self::EPSILON) {
+                $isSatisfied = $optimizationType === 'max'
+                    ? 0 >= $b - self::EPSILON
+                    : 0 <= $b + self::EPSILON;
+
+                if (! $isSatisfied) {
+                    return null;
+                }
+
+                continue;
+            }
+
+            $limit = $b / $a;
+
+            if ($optimizationType === 'max') {
+                if ($a > 0) {
+                    $lower = max($lower, $limit);
+                } else {
+                    $upper = min($upper, $limit);
+                }
+            } else {
+                if ($a > 0) {
+                    $upper = min($upper, $limit);
+                } else {
+                    $lower = max($lower, $limit);
+                }
+            }
+        }
+
+        return [
+            'minimum' => is_infinite($lower) ? null : $lower,
+            'maximum' => is_infinite($upper) ? null : $upper,
+        ];
     }
 
     private function buildReducedCostRows(
@@ -539,6 +675,112 @@ class SensitivityAnalysisService
         ];
     }
 
+    private function buildFeasibleVertices(array $constraints): array
+    {
+        $lines = $constraints;
+        $lines[] = [
+            'coefficients' => [1, 0],
+            'operator' => '=',
+            'rhs_value' => 0,
+        ];
+        $lines[] = [
+            'coefficients' => [0, 1],
+            'operator' => '=',
+            'rhs_value' => 0,
+        ];
+
+        $vertices = [];
+
+        for ($firstIndex = 0; $firstIndex < count($lines); $firstIndex++) {
+            for ($secondIndex = $firstIndex + 1; $secondIndex < count($lines); $secondIndex++) {
+                $point = $this->solveTwoByTwo(
+                    $lines[$firstIndex]['coefficients'],
+                    $lines[$secondIndex]['coefficients'],
+                    (float) $lines[$firstIndex]['rhs_value'],
+                    (float) $lines[$secondIndex]['rhs_value']
+                );
+
+                if ($point === null) {
+                    continue;
+                }
+
+                if ($this->isFeasiblePoint($point, $constraints)) {
+                    $vertices[] = $point;
+                }
+            }
+        }
+
+        return $this->uniquePoints($vertices);
+    }
+
+    private function solveTwoByTwo(
+        array $left,
+        array $right,
+        float $leftRhs,
+        float $rightRhs
+    ): ?array {
+        $determinant = ((float) $left[0] * (float) $right[1])
+            - ((float) $left[1] * (float) $right[0]);
+
+        if (abs($determinant) <= self::EPSILON) {
+            return null;
+        }
+
+        return [
+            (($leftRhs * (float) $right[1]) - ((float) $left[1] * $rightRhs)) / $determinant,
+            (((float) $left[0] * $rightRhs) - ($leftRhs * (float) $right[0])) / $determinant,
+        ];
+    }
+
+    private function isFeasiblePoint(array $point, array $constraints): bool
+    {
+        if ($point[0] < -self::EPSILON || $point[1] < -self::EPSILON) {
+            return false;
+        }
+
+        foreach ($constraints as $constraint) {
+            $lhs = ((float) $constraint['coefficients'][0] * $point[0])
+                + ((float) $constraint['coefficients'][1] * $point[1]);
+            $rhs = (float) $constraint['rhs_value'];
+
+            if ($constraint['operator'] === '<=' && $lhs - $rhs > self::EPSILON) {
+                return false;
+            }
+
+            if ($constraint['operator'] === '>=' && $rhs - $lhs > self::EPSILON) {
+                return false;
+            }
+
+            if ($constraint['operator'] === '=' && abs($lhs - $rhs) > self::EPSILON) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function uniquePoints(array $points): array
+    {
+        $unique = [];
+        $seen = [];
+
+        foreach ($points as $point) {
+            $key = sprintf('%.6f:%.6f', $point[0], $point[1]);
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $unique[] = [
+                abs($point[0]) <= self::EPSILON ? 0.0 : $point[0],
+                abs($point[1]) <= self::EPSILON ? 0.0 : $point[1],
+            ];
+        }
+
+        return $unique;
+    }
+
     private function calculateLhs(array $constraint, array $solution): float
     {
         $lhs = 0.0;
@@ -674,5 +916,14 @@ class SensitivityAnalysisService
         }
 
         return $rounded;
+    }
+
+    private function roundNullableNumber(float|int|string|null $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return $this->roundNumber($value);
     }
 }

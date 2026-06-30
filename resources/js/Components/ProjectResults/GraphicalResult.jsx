@@ -106,11 +106,8 @@ function InteractiveGraph({ data, project, constraints, hasMultipleSolutions }) 
     const orderedRegionPoints = orderPolygonPoints(regionPoints);
 
     const objectiveCoefficients = getObjectiveCoefficients(data, project);
-    const objectiveLine = data?.objective_line || null;
-    const objectiveSegment = buildObjectiveSegment(objectiveLine, project);
-
     const optimalSolution = normalizeOptimalSolution(data?.optimal_solution);
-
+    const objectiveLine = data?.objective_line || null;
     const optimalValue = getOptimalObjectiveValue(
         data,
         objectiveLine,
@@ -118,33 +115,43 @@ function InteractiveGraph({ data, project, constraints, hasMultipleSolutions }) 
         optimalSolution
     );
 
-    const restrictionLines = buildRestrictionLines(constraints);
+    const objectiveSegment = buildObjectiveSegment(
+        objectiveLine,
+        project,
+        optimalValue
+    );
+
+    const serverOptimalSegment = normalizeSegment(
+        data?.optimal_segment || data?.optimalSegment
+    );
 
     const optimalSegment = hasMultipleSolutions
-        ? buildOptimalSegment(
+        ? serverOptimalSegment ||
+          buildOptimalSegment(
               orderedRegionPoints,
               objectiveCoefficients,
               optimalValue
           )
         : null;
 
-    const allPoints = [
+    const axisSeedPoints = [
         ...orderedRegionPoints,
-        ...restrictionLines.flatMap((line) => [line.start, line.end]),
         objectiveSegment?.start,
         objectiveSegment?.end,
         optimalSolution,
         optimalSegment?.start,
         optimalSegment?.end,
+        ...buildConstraintAxisPoints(constraints),
     ].filter(isValidPoint);
 
-    if (allPoints.length === 0) {
+    if (axisSeedPoints.length === 0) {
         return (
             <SmallEmptyText text="Não existem pontos suficientes para desenhar o gráfico." />
         );
     }
 
-    const axisMax = getAxisMax(allPoints);
+    const axisMax = getAxisMax(axisSeedPoints);
+    const restrictionLines = buildRestrictionLines(constraints, axisMax);
 
     const traces = buildPlotTraces({
         regionPoints: orderedRegionPoints,
@@ -284,38 +291,38 @@ function buildPlotTraces({
     const traces = [];
 
     if (regionPoints.length > 0) {
-    const closedRegion = closePolygon(regionPoints);
+        const closedRegion = closePolygon(regionPoints);
 
-    traces.push({
-        type: 'scatter',
-        mode: 'lines',
-        name: 'Área Viável',
-        x: closedRegion.map((point) => point.x),
-        y: closedRegion.map((point) => point.y),
-        fill: 'toself',
-        fillcolor: GRAPH_COLORS.feasibleRegionFill,
-        line: {
-            color: GRAPH_COLORS.feasibleRegion,
-            width: 3,
-        },
-        hovertemplate:
-            'Área viável<br>x1: %{x:.4f}<br>x2: %{y:.4f}<extra></extra>',
-        showlegend: false,
-    });
+        traces.push({
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Área Viável',
+            x: closedRegion.map((point) => point.x),
+            y: closedRegion.map((point) => point.y),
+            fill: 'toself',
+            fillcolor: GRAPH_COLORS.feasibleRegionFill,
+            line: {
+                color: GRAPH_COLORS.feasibleRegion,
+                width: 3,
+            },
+            hovertemplate:
+                'Área viável<br>x1: %{x:.4f}<br>x2: %{y:.4f}<extra></extra>',
+            showlegend: false,
+        });
 
-    traces.push({
-        type: 'scatter',
-        mode: 'lines',
-        name: 'Área Viável',
-        x: [0, 1],
-        y: [0, 1],
-        line: {
-            color: GRAPH_COLORS.feasibleRegion,
-            width: 10,
-        },
-        hoverinfo: 'skip',
-        visible: 'legendonly',
-    });
+        traces.push({
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Área Viável',
+            x: [0, 1],
+            y: [0, 1],
+            line: {
+                color: GRAPH_COLORS.feasibleRegion,
+                width: 10,
+            },
+            hoverinfo: 'skip',
+            visible: 'legendonly',
+        });
     }
 
     restrictionLines.forEach((line, index) => {
@@ -574,6 +581,21 @@ function hasGraphicalData(data) {
 }
 
 function isMultipleSolution(data) {
+    if (data?.has_multiple_solution || data?.hasMultipleSolution) {
+        return true;
+    }
+
+    if (data?.optimal_segment || data?.optimalSegment) {
+        return true;
+    }
+
+    if (
+        Array.isArray(data?.alternative_solutions) &&
+        data.alternative_solutions.length > 0
+    ) {
+        return true;
+    }
+
     const status =
         data?.status ||
         data?.optimal_solution?.status ||
@@ -703,6 +725,21 @@ function normalizeOptimalSolution(optimalSolution) {
     return normalizePoint(optimalSolution);
 }
 
+function normalizeSegment(segment) {
+    if (!segment || typeof segment !== 'object') {
+        return null;
+    }
+
+    const start = normalizePoint(segment.start || segment[0]);
+    const end = normalizePoint(segment.end || segment[1]);
+
+    if (!isValidPoint(start) || !isValidPoint(end)) {
+        return null;
+    }
+
+    return { start, end };
+}
+
 function orderPolygonPoints(points) {
     const normalizedPoints = normalizePointList(points);
 
@@ -754,7 +791,7 @@ function getRestrictionColor(index) {
     return RESTRICTION_COLORS[index % RESTRICTION_COLORS.length];
 }
 
-function buildRestrictionLines(constraints) {
+function buildRestrictionLines(constraints, axisLimit = 24) {
     if (!Array.isArray(constraints)) {
         return [];
     }
@@ -787,7 +824,7 @@ function buildRestrictionLines(constraints) {
 
                 return {
                     start: { x: 0, y },
-                    end: { x: 24, y },
+                    end: { x: axisLimit, y },
                 };
             }
 
@@ -800,7 +837,7 @@ function buildRestrictionLines(constraints) {
 
                 return {
                     start: { x, y: 0 },
-                    end: { x, y: 24 },
+                    end: { x, y: axisLimit },
                 };
             }
 
@@ -819,7 +856,7 @@ function buildRestrictionLines(constraints) {
         .filter(Boolean);
 }
 
-function buildObjectiveSegment(objectiveLine, project) {
+function buildObjectiveSegment(objectiveLine, project, optimalValue = null) {
     const coefficients =
         objectiveLine?.coefficients ||
         project?.objective_function?.coefficients ||
@@ -827,7 +864,7 @@ function buildObjectiveSegment(objectiveLine, project) {
         project?.objective?.coefficients ||
         [];
 
-    const z = Number(objectiveLine?.z);
+    const z = Number(objectiveLine?.z ?? optimalValue);
 
     if (coefficients.length < 2 || !Number.isFinite(z)) {
         return null;
@@ -1020,4 +1057,35 @@ function isValidPoint(point) {
 
 function SmallEmptyText({ text }) {
     return <p className="text-sm leading-relaxed text-[#777777]">{text}</p>;
+}
+
+function buildConstraintAxisPoints(constraints) {
+    if (!Array.isArray(constraints)) {
+        return [];
+    }
+
+    const points = [{ x: 0, y: 0 }];
+
+    constraints.forEach((constraint) => {
+        const [a = 0, b = 0] = constraint.coefficients || [];
+        const rhs = Number(constraint.rhs_value);
+        const coefficientA = Number(a);
+        const coefficientB = Number(b);
+
+        if (!Number.isFinite(rhs)) {
+            return;
+        }
+
+        if (coefficientA !== 0) {
+            points.push({ x: rhs / coefficientA, y: 0 });
+        }
+
+        if (coefficientB !== 0) {
+            points.push({ x: 0, y: rhs / coefficientB });
+        }
+    });
+
+    return points.filter(
+        (point) => isValidPoint(point) && point.x >= 0 && point.y >= 0
+    );
 }

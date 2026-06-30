@@ -28,17 +28,23 @@ class GraphicalMethodService
         $intersections = $this->buildIntersections($constraints);
         $feasibleVertices = $this->filterFeasibleVertices($intersections, $constraints);
         $orderedVertices = $this->orderVertices($feasibleVertices);
-        $optimal = $this->findOptimalVertex(
+        $optimalResult = $this->findOptimalResult(
             $orderedVertices,
             $objective,
             $project->optimization_type->value
         );
+        $optimal = $optimalResult['optimal_solution'];
 
         $result = [
+            'status' => $optimalResult['status'],
+            'objective_value' => $optimalResult['objective_value'],
             'intersection_points' => $intersections,
             'vertices' => $orderedVertices,
             'objective_line' => $this->buildObjectiveLine($objective, $optimal),
             'optimal_solution' => $optimal,
+            'optimal_vertices' => $optimalResult['optimal_vertices'],
+            'optimal_segment' => $optimalResult['optimal_segment'],
+            'has_multiple_solution' => $optimalResult['has_multiple_solution'],
             'solution' => $orderedVertices
         ];
   
@@ -166,10 +172,11 @@ class GraphicalMethodService
         return array_values($vertices);
     }
 
-    private function findOptimalVertex(array $vertices, array $objective, string $optimizationType): array
+    private function findOptimalResult(array $vertices, array $objective, string $optimizationType): array
     {
         $bestVertex = null;
         $bestValue = null;
+        $bestVertices = [];
 
         foreach ($vertices as $vertex) {
             $value = ((float) $objective[0] * (float) $vertex['x'])
@@ -178,32 +185,101 @@ class GraphicalMethodService
             if ($bestVertex === null) {
                 $bestVertex = $vertex;
                 $bestValue = $value;
+                $bestVertices = [$vertex];
                 continue;
             }
 
             if ($optimizationType === 'max' && $value > $bestValue + 1e-9) {
                 $bestVertex = $vertex;
                 $bestValue = $value;
+                $bestVertices = [$vertex];
+                continue;
             }
 
             if ($optimizationType === 'min' && $value < $bestValue - 1e-9) {
                 $bestVertex = $vertex;
                 $bestValue = $value;
+                $bestVertices = [$vertex];
+                continue;
+            }
+
+            if (abs($value - $bestValue) <= 1e-9) {
+                $bestVertices[] = $vertex;
             }
         }
 
         if ($bestVertex === null) {
             return [
                 'status' => 'infeasible',
-                'message' => 'Nao foi possivel encontrar vertices viaveis.',
+                'objective_value' => null,
+                'optimal_solution' => [
+                    'status' => 'infeasible',
+                    'message' => 'Nao foi possivel encontrar vertices viaveis.',
+                ],
+                'optimal_vertices' => [],
+                'optimal_segment' => null,
+                'has_multiple_solution' => false,
             ];
         }
 
+        $optimalVertices = $this->cleanVertices($this->uniquePoints($bestVertices));
+        $hasMultipleSolution = count($optimalVertices) >= 2;
+
         return [
-            'x1' => $this->cleanValue((float) $bestVertex['x']),
-            'x2' => $this->cleanValue((float) $bestVertex['y']),
+            'status' => $hasMultipleSolution ? 'multiple' : 'optimal',
             'objective_value' => $this->cleanValue($bestValue),
+            'optimal_solution' => [
+                'x1' => $this->cleanValue((float) $bestVertex['x']),
+                'x2' => $this->cleanValue((float) $bestVertex['y']),
+                'objective_value' => $this->cleanValue($bestValue),
+                'status' => $hasMultipleSolution ? 'multiple' : 'optimal',
+            ],
+            'optimal_vertices' => $optimalVertices,
+            'optimal_segment' => $hasMultipleSolution
+                ? $this->buildOptimalSegment($optimalVertices)
+                : null,
+            'has_multiple_solution' => $hasMultipleSolution,
         ];
+    }
+
+    private function cleanVertices(array $vertices): array
+    {
+        return array_values(array_map(
+            fn (array $vertex) => [
+                'x' => $this->cleanValue((float) $vertex['x']),
+                'y' => $this->cleanValue((float) $vertex['y']),
+            ],
+            $vertices
+        ));
+    }
+
+    private function buildOptimalSegment(array $vertices): ?array
+    {
+        if (count($vertices) < 2) {
+            return null;
+        }
+
+        $bestSegment = null;
+        $bestDistance = -1.0;
+
+        for ($firstIndex = 0; $firstIndex < count($vertices); $firstIndex++) {
+            for ($secondIndex = $firstIndex + 1; $secondIndex < count($vertices); $secondIndex++) {
+                $first = $vertices[$firstIndex];
+                $second = $vertices[$secondIndex];
+                $distance = (($first['x'] - $second['x']) ** 2)
+                    + (($first['y'] - $second['y']) ** 2);
+
+                if ($distance > $bestDistance) {
+                    $bestDistance = $distance;
+                    $bestSegment = [
+                        'start' => $first,
+                        'end' => $second,
+                    ];
+                }
+            }
+        }
+
+        return $bestSegment;
     }
 
     private function buildObjectiveLine(array $objective, array $optimal): array

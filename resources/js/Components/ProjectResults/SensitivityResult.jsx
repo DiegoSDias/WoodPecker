@@ -119,8 +119,12 @@ export default function SensitivityResult({
                         </TableCell>
 
                         <TableCell>{formatNumber(row.reducedCost)}</TableCell>
-                        <TableCell>{formatNumber(row.allowableIncrease)}</TableCell>
-                        <TableCell>{formatNumber(row.allowableDecrease)}</TableCell>
+                        <TableCell>
+                            {formatLimitNumber(row.allowableIncrease)}
+                        </TableCell>
+                        <TableCell>
+                            {formatLimitNumber(row.allowableDecrease)}
+                        </TableCell>
                     </tr>
                 )}
             />
@@ -140,8 +144,8 @@ export default function SensitivityResult({
                         </TableCell>
 
                         <TableCell>{formatNumber(row.currentRhs)}</TableCell>
-                        <TableCell>{formatNumber(row.minimum)}</TableCell>
-                        <TableCell>{formatNumber(row.maximum)}</TableCell>
+                        <TableCell>{formatLimitNumber(row.minimum)}</TableCell>
+                        <TableCell>{formatLimitNumber(row.maximum)}</TableCell>
                         <TableCell>{formatNumber(row.slack)}</TableCell>
                     </tr>
                 )}
@@ -311,6 +315,14 @@ function StrongNumber({ children }) {
             {children}
         </span>
     );
+}
+
+function formatLimitNumber(value) {
+    if (value === null || value === undefined || value === '') {
+        return 'Sem limite';
+    }
+
+    return formatNumber(value);
 }
 
 function StatusText({ children, active }) {

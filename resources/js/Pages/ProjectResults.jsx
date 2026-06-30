@@ -5,6 +5,7 @@ import GraphicalResult from '@/Components/ProjectResults/GraphicalResult';
 import IntegerResult from '@/Components/ProjectResults/IntegerResult';
 import OverviewResult from '@/Components/ProjectResults/OverviewResult';
 import ResultsSidebar from '@/Components/ProjectResults/ResultsSidebar';
+import SensitivityResult from '@/Components/ProjectResults/SensitivityResult';
 import SimplexResult from '@/Components/ProjectResults/SimplexResult';
 import {
     extractProject,
@@ -46,6 +47,13 @@ export const RESULT_TABS = [
         key: 'integer',
         label: 'Solução Inteira',
         icon: '/images/git-merge.png',
+        type: 'solve',
+    },
+    {
+        key: 'sensitivity',
+        label: 'Análise de Sensibilidade',
+        icon: '/images/stats-chart-outline.png',
+        fallbackIcon: '/images/chart-dots.png',
         type: 'solve',
     },
 ];
@@ -136,9 +144,16 @@ export default function ProjectResults({ auth, projectId }) {
 
             setSolutions(extractSolutions(refreshedSolutions.data));
         } catch (error) {
-            setErrorMessage(
-                getFriendlyMethodError(error, tab.key, tab.label, project)
+            const friendlyMessage = getFriendlyMethodError(
+                error,
+                tab.key,
+                tab.label,
+                project
             );
+
+            if (friendlyMessage) {
+                setErrorMessage(friendlyMessage);
+            }
         } finally {
             setLoadingMethod(null);
         }
@@ -248,6 +263,17 @@ function ResultContent({
     if (activeTab === 'integer') {
         return (
             <IntegerResult
+                data={resultData}
+                savedSolution={savedSolution}
+                project={project}
+                solutions={solutions}
+            />
+        );
+    }
+
+    if (activeTab === 'sensitivity') {
+        return (
+            <SensitivityResult
                 data={resultData}
                 savedSolution={savedSolution}
                 project={project}

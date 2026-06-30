@@ -84,7 +84,6 @@ export default function DualResult({ data, savedSolution, project }) {
                             <IterationBlock
                                 key={`dual-${iteration.iteration || index}-${index}`}
                                 iteration={iteration}
-                                previousIteration={dualIterations[index - 1]}
                                 nextIteration={dualIterations[index + 1]}
                                 project={dualProblem || primalProject}
                                 columnNames={dualColumnNames}
@@ -110,7 +109,6 @@ export default function DualResult({ data, savedSolution, project }) {
                             <IterationBlock
                                 key={`primal-${iteration.iteration || index}-${index}`}
                                 iteration={iteration}
-                                previousIteration={primalIterations[index - 1]}
                                 nextIteration={primalIterations[index + 1]}
                                 project={primalProject}
                                 columnNames={primalColumnNames}
@@ -325,7 +323,6 @@ function DualSymbolCard({ label, imageSrc, value, valueClassName }) {
 
 function IterationBlock({
     iteration,
-    previousIteration,
     nextIteration,
     project,
     columnNames,
@@ -354,7 +351,6 @@ function IterationBlock({
             {Array.isArray(iteration.tableau) && iteration.tableau.length > 0 ? (
                 <IterationTable
                     iteration={iteration}
-                    previousIteration={previousIteration}
                     nextIteration={nextIteration}
                     matrix={iteration.tableau}
                     project={project}
@@ -369,7 +365,6 @@ function IterationBlock({
 
 function IterationTable({
     iteration,
-    previousIteration,
     nextIteration,
     matrix,
     project,
@@ -386,33 +381,17 @@ function IterationTable({
     const rowLabels = buildIterationRowLabels(displayRows);
 
     const pivotRowIndex = getPivotIndex(
-        iteration?.pivot_row_index,
-        iteration?.pivot_row,
-        iteration?.pivotRowIndex,
-        iteration?.pivotRow,
         nextIteration?.pivot_row_index,
         nextIteration?.pivot_row,
         nextIteration?.pivotRowIndex,
-        nextIteration?.pivotRow,
-        previousIteration?.pivot_row_index,
-        previousIteration?.pivot_row,
-        previousIteration?.pivotRowIndex,
-        previousIteration?.pivotRow
+        nextIteration?.pivotRow
     );
 
     const pivotColumnIndex = getPivotIndex(
-        iteration?.pivot_column_index,
-        iteration?.pivot_column,
-        iteration?.pivotColumnIndex,
-        iteration?.pivotColumn,
         nextIteration?.pivot_column_index,
         nextIteration?.pivot_column,
         nextIteration?.pivotColumnIndex,
-        nextIteration?.pivotColumn,
-        previousIteration?.pivot_column_index,
-        previousIteration?.pivot_column,
-        previousIteration?.pivotColumnIndex,
-        previousIteration?.pivotColumn
+        nextIteration?.pivotColumn
     );
 
     const pivotInfo = buildPivotInfo({
@@ -500,7 +479,7 @@ function PivotMessage({ pivotInfo }) {
                     .
                 </>
             ) : (
-                'não informado nesta iteração.'
+                'não há novo pivô nesta iteração.'
             )}
         </p>
     );

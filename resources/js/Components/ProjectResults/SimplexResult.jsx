@@ -141,10 +141,6 @@ function IterationTable({
     const rowLabels = buildIterationRowLabels(displayRows);
 
     const pivotRowIndex = getPivotIndex(
-        iteration?.pivot_row_index,
-        iteration?.pivot_row,
-        iteration?.pivotRowIndex,
-        iteration?.pivotRow,
         nextIteration?.pivot_row_index,
         nextIteration?.pivot_row,
         nextIteration?.pivotRowIndex,
@@ -152,10 +148,6 @@ function IterationTable({
     );
 
     const pivotColumnIndex = getPivotIndex(
-        iteration?.pivot_column_index,
-        iteration?.pivot_column,
-        iteration?.pivotColumnIndex,
-        iteration?.pivotColumn,
         nextIteration?.pivot_column_index,
         nextIteration?.pivot_column,
         nextIteration?.pivotColumnIndex,
@@ -247,7 +239,7 @@ function PivotMessage({ pivotInfo }) {
                     .
                 </>
             ) : (
-                'não informado nesta iteração.'
+                'não há novo pivô nesta iteração.'
             )}
         </p>
     );

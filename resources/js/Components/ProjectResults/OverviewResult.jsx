@@ -136,7 +136,8 @@ function OverviewHero({ project, solution, objectiveValue }) {
                     </p>
 
                     <p className="text-base">
-                        <strong>Status:</strong> {formatStatus(data?.status)}
+                        <strong>Status:</strong>{' '}
+                        {formatOverviewStatus(solution, data)}
                     </p>
                 </div>
             </div>
@@ -255,6 +256,77 @@ function OverviewSummary({
             )}
         </div>
     );
+}
+
+function formatOverviewStatus(solution, data) {
+    const status = data?.status;
+
+    if (status !== 'multiple') {
+        return formatStatus(status);
+    }
+
+    if (hasConfirmedMultipleSolution(solution, data)) {
+        return formatStatus(status);
+    }
+
+    return formatStatus('optimal');
+}
+
+function hasConfirmedMultipleSolution(solution, data) {
+    if (!data) {
+        return false;
+    }
+
+    const method = solution?.method_used;
+
+    if (method === 'graphical') {
+        if (
+            data.has_multiple_solution === true ||
+            data.hasMultipleSolution === true
+        ) {
+            return true;
+        }
+
+        if (data.optimal_segment || data.optimalSegment) {
+            return true;
+        }
+
+        const optimalVertices = data.optimal_vertices || data.optimalVertices;
+        if (Array.isArray(optimalVertices) && optimalVertices.length >= 2) {
+            return true;
+        }
+    }
+
+    const alternatives = data.alternative_solutions || data.alternativeSolutions;
+    if (!Array.isArray(alternatives) || alternatives.length === 0) {
+        return false;
+    }
+
+    const currentVariables = cleanVariables(
+        getOverviewVariables(data) || getOverviewVariables(solution) || {}
+    );
+
+    return alternatives.some((alternative) =>
+        hasDifferentVariables(currentVariables, cleanVariables(alternative))
+    );
+}
+
+function hasDifferentVariables(currentVariables, alternativeVariables) {
+    const keys = Object.keys({
+        ...currentVariables,
+        ...alternativeVariables,
+    });
+
+    if (keys.length === 0) {
+        return false;
+    }
+
+    return keys.some((key) => {
+        const currentValue = Number(currentVariables[key] ?? 0);
+        const alternativeValue = Number(alternativeVariables[key] ?? 0);
+
+        return Math.abs(currentValue - alternativeValue) > 1e-6;
+    });
 }
 
 function EmptyState({ title, description }) {

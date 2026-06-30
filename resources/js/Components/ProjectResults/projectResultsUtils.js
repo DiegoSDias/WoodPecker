@@ -62,13 +62,43 @@ export function getBestOverviewSolution(solutions) {
         return null;
     }
 
+    const graphicalSolution = getLatestSolutionByMethod(solutions, 'graphical');
+
+    if (hasConfirmedMultipleResult(graphicalSolution)) {
+        return graphicalSolution;
+    }
+
     return (
         getLatestSolutionByMethod(solutions, 'simplex') ||
         getLatestSolutionByMethod(solutions, 'integer') ||
-        getLatestSolutionByMethod(solutions, 'graphical') ||
+        graphicalSolution ||
         getLatestSolutionByMethod(solutions, 'dual') ||
         solutions[0]
     );
+}
+
+function hasConfirmedMultipleResult(solution) {
+    if (!solution || solution.method_used !== 'graphical') {
+        return false;
+    }
+
+    const data = extractResultData(solution);
+
+    if (!data) {
+        return false;
+    }
+
+    if (data.has_multiple_solution === true || data.hasMultipleSolution === true) {
+        return true;
+    }
+
+    if (data.optimal_segment || data.optimalSegment) {
+        return true;
+    }
+
+    const optimalVertices = data.optimal_vertices || data.optimalVertices;
+
+    return Array.isArray(optimalVertices) && optimalVertices.length >= 2;
 }
 
 export function getObjectiveValue(solution) {

@@ -330,6 +330,10 @@ function IterationBlock({
     project,
     columnNames,
 }) {
+    const phaseLabel = formatPhaseLabel(
+        iteration?.phase_label || iteration?.phase || ''
+    );
+
     return (
         <div>
             <div className="mb-4 flex items-center gap-4">
@@ -339,6 +343,11 @@ function IterationBlock({
 
                 <h3 className="font-inter text-xl font-black text-[#653018]">
                     Iteração {iteration.iteration || '-'}
+                    {phaseLabel ? (
+                        <span className="ml-3 text-sm font-semibold text-[#8a5b33]">
+                            {phaseLabel}
+                        </span>
+                    ) : null}
                 </h3>
             </div>
 
@@ -406,61 +415,132 @@ function IterationTable({
         previousIteration?.pivotColumn
     );
 
+    const pivotInfo = buildPivotInfo({
+        pivotRowIndex,
+        pivotColumnIndex,
+        rows: displayRows,
+        rowLabels,
+        headers,
+    });
+
     return (
-        <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-[42rem] border-collapse text-center">
-                    <thead className="bg-[#eadccb] font-inter text-xl font-black text-[#653018]">
-                        <tr>
-                            <th className="px-5 py-4">Base</th>
+        <div>
+            <div className="overflow-hidden rounded-xl bg-white shadow-sm">
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[42rem] border-collapse text-center">
+                        <thead className="bg-[#eadccb] font-inter text-xl font-black text-[#653018]">
+                            <tr>
+                                <th className="px-5 py-4">Base</th>
 
-                            {headers.map((header) => (
-                                <th key={header} className="px-5 py-4">
-                                    {header}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        {displayRows.map((row, rowIndex) => (
-                            <tr
-                                key={rowIndex}
-                                className="border-t border-[#eadccb]"
-                            >
-                                <td className="px-5 py-4 font-semibold text-[#111111]">
-                                    {rowLabels[rowIndex] === 'Z' ? (
-                                        <img
-                                            src="/images/white-z.png"
-                                            alt="Z"
-                                            className="mx-auto h-9 w-auto object-contain invert"
-                                        />
-                                    ) : (
-                                        rowLabels[rowIndex]
-                                    )}
-                                </td>
-
-                                {headers.map((_, columnIndex) => (
-                                    <td
-                                        key={columnIndex}
-                                        className={getCellClassName(
-                                            rowIndex,
-                                            columnIndex,
-                                            pivotRowIndex,
-                                            pivotColumnIndex,
-                                            displayRows
-                                        )}
-                                    >
-                                        {formatNumber(row[columnIndex])}
-                                    </td>
+                                {headers.map((header) => (
+                                    <th key={header} className="px-5 py-4">
+                                        {header}
+                                    </th>
                                 ))}
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+
+                        <tbody>
+                            {displayRows.map((row, rowIndex) => (
+                                <tr
+                                    key={rowIndex}
+                                    className="border-t border-[#eadccb]"
+                                >
+                                    <td className="px-5 py-4 font-semibold text-[#111111]">
+                                        {rowLabels[rowIndex] === 'Z' ? (
+                                            <img
+                                                src="/images/white-z.png"
+                                                alt="Z"
+                                                className="mx-auto h-9 w-auto object-contain invert"
+                                            />
+                                        ) : (
+                                            rowLabels[rowIndex]
+                                        )}
+                                    </td>
+
+                                    {headers.map((_, columnIndex) => (
+                                        <td
+                                            key={columnIndex}
+                                            className={getCellClassName(
+                                                rowIndex,
+                                                columnIndex,
+                                                pivotRowIndex,
+                                                pivotColumnIndex,
+                                                displayRows
+                                            )}
+                                        >
+                                            {formatNumber(row[columnIndex])}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
+
+            <PivotMessage pivotInfo={pivotInfo} />
         </div>
     );
+}
+
+function PivotMessage({ pivotInfo }) {
+    return (
+        <p className="mt-3 max-w-[58rem] text-sm leading-relaxed text-[#653018]">
+            <span className="font-inter font-black">Pivô utilizado:</span>{' '}
+            {pivotInfo ? (
+                <>
+                    linha <span className="font-semibold">{pivotInfo.row}</span>,
+                    coluna{' '}
+                    <span className="font-semibold">{pivotInfo.column}</span>,
+                    valor{' '}
+                    <span className="font-semibold">
+                        {formatNumber(pivotInfo.value)}
+                    </span>
+                    .
+                </>
+            ) : (
+                'não informado nesta iteração.'
+            )}
+        </p>
+    );
+}
+
+function buildPivotInfo({
+    pivotRowIndex,
+    pivotColumnIndex,
+    rows,
+    rowLabels,
+    headers,
+}) {
+    const normalizedPivotRowIndex = normalizePivotRowIndex(
+        pivotRowIndex,
+        rows
+    );
+
+    const normalizedPivotColumnIndex =
+        normalizePivotColumnIndex(pivotColumnIndex);
+
+    if (
+        !Number.isInteger(normalizedPivotRowIndex) ||
+        !Number.isInteger(normalizedPivotColumnIndex)
+    ) {
+        return null;
+    }
+
+    const row = rows?.[normalizedPivotRowIndex];
+
+    if (!Array.isArray(row)) {
+        return null;
+    }
+
+    const value = row[normalizedPivotColumnIndex];
+
+    return {
+        row: rowLabels?.[normalizedPivotRowIndex] || '-',
+        column: headers?.[normalizedPivotColumnIndex] || '-',
+        value,
+    };
 }
 
 function getCellClassName(
@@ -475,9 +555,8 @@ function getCellClassName(
         rows
     );
 
-    const normalizedPivotColumnIndex = normalizePivotColumnIndex(
-        pivotColumnIndex
-    );
+    const normalizedPivotColumnIndex =
+        normalizePivotColumnIndex(pivotColumnIndex);
 
     const isPivotCell =
         Number.isInteger(normalizedPivotRowIndex) &&
@@ -536,17 +615,42 @@ function normalizePivotColumnIndex(pivotColumnIndex) {
     return pivotColumnIndex;
 }
 
+function formatPhaseLabel(phase) {
+    if (!phase) {
+        return '';
+    }
+
+    const normalized = String(phase)
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '');
+
+    if (normalized === 'phase1' || normalized === 'fase1') {
+        return 'Fase 1';
+    }
+
+    if (normalized === 'phase2' || normalized === 'fase2') {
+        return 'Fase 2';
+    }
+
+    return String(phase)
+        .replace(/phase/gi, 'Fase ')
+        .replace(/fase/gi, 'Fase ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 function buildVisibleHeaders(headers, rows) {
     const visibleHeaders = [...headers];
     const rowLength = rows?.[0]?.length || 0;
 
     if (rowLength > 0 && visibleHeaders.length === rowLength - 1) {
-        visibleHeaders.push('Solution');
+        visibleHeaders.push('RHS');
         return visibleHeaders;
     }
 
     if (visibleHeaders.length > 0) {
-        visibleHeaders[visibleHeaders.length - 1] = 'Solution';
+        visibleHeaders[visibleHeaders.length - 1] = 'RHS';
     }
 
     return visibleHeaders;

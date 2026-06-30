@@ -20,6 +20,7 @@ class SensitivityAnalysisService
         $project = $this->projectService->load($project);
 
         $constraints = $this->formatConstraints($project);
+
         $primal = $this->core->solveSimplex(
             $project->objectiveFunction->coefficients,
             $constraints,
@@ -44,20 +45,24 @@ class SensitivityAnalysisService
         );
 
         $decisionVariables = $this->buildDecisionVariables($primal['solution'] ?? []);
+
         $shadowPriceRows = $this->buildShadowPriceRows(
             $constraints,
             $shadowPrices,
             $primal['solution'] ?? []
         );
+
         $reducedCostRows = $this->buildReducedCostRows(
             $project->objectiveFunction->coefficients,
             $primal['reduced_costs'] ?? [],
             $primal['solution'] ?? []
         );
+
         $objectiveRangeRows = $this->buildObjectiveRanges(
             $project->objectiveFunction->coefficients,
             $primal['reduced_costs'] ?? []
         );
+
         $rhsRangeRows = $this->buildRhsRangeRows(
             $constraints,
             $primal['solution'] ?? [],
@@ -69,16 +74,12 @@ class SensitivityAnalysisService
             'method_used' => 'sensitivity',
             'optimization_type' => $project->optimization_type->value,
             'objective_value' => $this->roundNumber($primal['objective_value'] ?? null),
-            'primal_solution' => $this->roundVariables($primal['solution'] ?? []),
+            'primal_solution' => $decisionVariables,
             'variables' => $decisionVariables,
-            'shadow_prices' => $this->roundVariables($shadowPrices),
-            'shadow_price_rows' => $this->roundShadowPriceRows($shadowPriceRows),
-            'reduced_costs' => $this->roundVariables($primal['reduced_costs'] ?? []),
-            'reduced_cost_rows' => $reducedCostRows,
+            'shadow_prices' => $shadowPriceRows,
+            'reduced_costs' => $reducedCostRows,
             'objective_ranges' => $objectiveRangeRows,
             'rhs_ranges' => $rhsRangeRows,
-            'objective_range_rows' => $objectiveRangeRows,
-            'rhs_range_rows' => $rhsRangeRows,
             'active_constraints' => $this->extractConstraintNames(
                 $shadowPriceRows,
                 'Ativa'
@@ -204,13 +205,7 @@ class SensitivityAnalysisService
 
         foreach ($constraints as $index => $constraint) {
             $currentRhs = (float) $constraint['rhs_value'];
-            $lhs = 0.0;
-
-            foreach ($constraint['coefficients'] as $variableIndex => $coefficient) {
-                $lhs += (float) $coefficient * (float) (
-                    $solution['x' . ($variableIndex + 1)] ?? 0.0
-                );
-            }
+            $lhs = $this->calculateLhs($constraint, $solution);
 
             $slack = match ($constraint['operator']) {
                 '<=' => $currentRhs - $lhs,
@@ -236,25 +231,40 @@ class SensitivityAnalysisService
         array $constraints,
         array $solution,
         array $shadowPrices
-    ): array
-    {
+    ): array {
         $ranges = [];
 
-        foreach ($constraints as $index => $constraint) {
-            $lhs = 0.0;
-            foreach ($constraint['coefficients'] as $variableIndex => $coefficient) {
-                $lhs += (float) $coefficient * (float) ($solution['x' . ($variableIndex + 1)] ?? 0.0);
-            }
+        $numberOfVariables = $this->countDecisionVariablesFromConstraints($constraints);
 
+        foreach ($constraints as $index => $constraint) {
             $rhs = (float) $constraint['rhs_value'];
+            $lhs = $this->calculateLhs($constraint, $solution);
+
             $slack = match ($constraint['operator']) {
                 '<=' => $rhs - $lhs,
                 '>=' => $lhs - $rhs,
                 default => abs($lhs - $rhs),
             };
 
-            $allowableIncrease = abs($slack);
-            $allowableDecrease = abs($slack);
+            $isActive = abs($slack) <= self::EPSILON;
+
+            if ($isActive) {
+                $range = $this->buildActiveConstraintRhsRange(
+                    $constraints,
+                    $solution,
+                    $index,
+                    $numberOfVariables
+                );
+            } else {
+                $range = $this->buildInactiveConstraintRhsRange(
+                    $constraint,
+                    $rhs,
+                    $lhs
+                );
+            }
+
+            $minimum = $range['minimum'];
+            $maximum = $range['maximum'];
 
             $ranges['c' . ($index + 1)] = [
                 'restriction' => 'R' . ($index + 1),
@@ -263,14 +273,294 @@ class SensitivityAnalysisService
                 'shadow_price' => $this->roundNumber(
                     (float) ($shadowPrices['y' . ($index + 1)] ?? 0.0)
                 ),
-                'allowable_increase' => $this->roundNumber($allowableIncrease),
-                'allowable_decrease' => $this->roundNumber($allowableDecrease),
-                'minimum' => $this->roundNumber($rhs - $allowableDecrease),
-                'maximum' => $this->roundNumber($rhs + $allowableIncrease),
+                'allowable_increase' => $maximum === null
+                    ? null
+                    : $this->roundNumber($maximum - $rhs),
+                'allowable_decrease' => $minimum === null
+                    ? null
+                    : $this->roundNumber($rhs - $minimum),
+                'minimum' => $minimum === null
+                    ? null
+                    : $this->roundNumber($minimum),
+                'maximum' => $maximum === null
+                    ? null
+                    : $this->roundNumber($maximum),
+                'minimum_label' => $minimum === null
+                    ? 'Sem limite inferior'
+                    : $this->cleanValue((float) $minimum),
+                'maximum_label' => $maximum === null
+                    ? 'Sem limite superior'
+                    : $this->cleanValue((float) $maximum),
             ];
         }
 
         return $ranges;
+    }
+
+    private function buildInactiveConstraintRhsRange(
+        array $constraint,
+        float $rhs,
+        float $lhs
+    ): array {
+        return match ($constraint['operator']) {
+            '<=' => [
+                'minimum' => $lhs,
+                'maximum' => null,
+            ],
+            '>=' => [
+                'minimum' => null,
+                'maximum' => $lhs,
+            ],
+            default => [
+                'minimum' => $rhs,
+                'maximum' => $rhs,
+            ],
+        };
+    }
+
+    private function buildActiveConstraintRhsRange(
+        array $constraints,
+        array $solution,
+        int $targetConstraintIndex,
+        int $numberOfVariables
+    ): array {
+        $currentRhs = (float) $constraints[$targetConstraintIndex]['rhs_value'];
+
+        if ($numberOfVariables !== 2) {
+            return [
+                'minimum' => $currentRhs,
+                'maximum' => $currentRhs,
+            ];
+        }
+
+        $basisIndexes = $this->findTwoVariableBasis(
+            $constraints,
+            $solution,
+            $targetConstraintIndex
+        );
+
+        if ($basisIndexes === null) {
+            return [
+                'minimum' => $currentRhs,
+                'maximum' => $currentRhs,
+            ];
+        }
+
+        [$firstBasisIndex, $secondBasisIndex] = $basisIndexes;
+
+        $basisMatrix = [
+            [
+                (float) $constraints[$firstBasisIndex]['coefficients'][0],
+                (float) $constraints[$firstBasisIndex]['coefficients'][1],
+            ],
+            [
+                (float) $constraints[$secondBasisIndex]['coefficients'][0],
+                (float) $constraints[$secondBasisIndex]['coefficients'][1],
+            ],
+        ];
+
+        $inverse = $this->invertTwoByTwoMatrix($basisMatrix);
+
+        if ($inverse === null) {
+            return [
+                'minimum' => $currentRhs,
+                'maximum' => $currentRhs,
+            ];
+        }
+
+        if ($targetConstraintIndex === $firstBasisIndex) {
+            $deltaVector = [
+                $inverse[0][0],
+                $inverse[1][0],
+            ];
+        } elseif ($targetConstraintIndex === $secondBasisIndex) {
+            $deltaVector = [
+                $inverse[0][1],
+                $inverse[1][1],
+            ];
+        } else {
+            return [
+                'minimum' => $currentRhs,
+                'maximum' => $currentRhs,
+            ];
+        }
+
+        $currentX = [
+            (float) ($solution['x1'] ?? 0.0),
+            (float) ($solution['x2'] ?? 0.0),
+        ];
+
+        $deltaMin = -1 * INF;
+        $deltaMax = INF;
+
+        foreach ($constraints as $constraintIndex => $constraint) {
+            if ($constraintIndex === $targetConstraintIndex) {
+                continue;
+            }
+
+            $a1 = (float) $constraint['coefficients'][0];
+            $a2 = (float) $constraint['coefficients'][1];
+            $constraintRhs = (float) $constraint['rhs_value'];
+
+            $currentValue = $a1 * $currentX[0] + $a2 * $currentX[1];
+            $sensitivity = $a1 * $deltaVector[0] + $a2 * $deltaVector[1];
+
+            if (abs($sensitivity) <= self::EPSILON) {
+                continue;
+            }
+
+            $limit = ($constraintRhs - $currentValue) / $sensitivity;
+
+            if ($constraint['operator'] === '<=') {
+                if ($sensitivity > 0) {
+                    $deltaMax = min($deltaMax, $limit);
+                } else {
+                    $deltaMin = max($deltaMin, $limit);
+                }
+            }
+
+            if ($constraint['operator'] === '>=') {
+                if ($sensitivity > 0) {
+                    $deltaMin = max($deltaMin, $limit);
+                } else {
+                    $deltaMax = min($deltaMax, $limit);
+                }
+            }
+
+            if ($constraint['operator'] === '=') {
+                $deltaMin = max($deltaMin, $limit);
+                $deltaMax = min($deltaMax, $limit);
+            }
+        }
+
+        foreach ([0, 1] as $variableIndex) {
+            $sensitivity = $deltaVector[$variableIndex];
+
+            if (abs($sensitivity) <= self::EPSILON) {
+                continue;
+            }
+
+            $limit = -$currentX[$variableIndex] / $sensitivity;
+
+            if ($sensitivity > 0) {
+                $deltaMin = max($deltaMin, $limit);
+            } else {
+                $deltaMax = min($deltaMax, $limit);
+            }
+        }
+
+        return [
+            'minimum' => is_infinite($deltaMin) ? null : $currentRhs + $deltaMin,
+            'maximum' => is_infinite($deltaMax) ? null : $currentRhs + $deltaMax,
+        ];
+    }
+
+    private function findTwoVariableBasis(
+        array $constraints,
+        array $solution,
+        int $targetConstraintIndex
+    ): ?array {
+        $activeIndexes = [];
+
+        foreach ($constraints as $index => $constraint) {
+            $rhs = (float) $constraint['rhs_value'];
+            $lhs = $this->calculateLhs($constraint, $solution);
+
+            $slack = match ($constraint['operator']) {
+                '<=' => $rhs - $lhs,
+                '>=' => $lhs - $rhs,
+                default => abs($lhs - $rhs),
+            };
+
+            if (abs($slack) <= self::EPSILON) {
+                $activeIndexes[] = $index;
+            }
+        }
+
+        if (! in_array($targetConstraintIndex, $activeIndexes, true)) {
+            return null;
+        }
+
+        foreach ($activeIndexes as $firstIndex) {
+            foreach ($activeIndexes as $secondIndex) {
+                if ($firstIndex === $secondIndex) {
+                    continue;
+                }
+
+                if (
+                    $firstIndex !== $targetConstraintIndex
+                    && $secondIndex !== $targetConstraintIndex
+                ) {
+                    continue;
+                }
+
+                $matrix = [
+                    [
+                        (float) $constraints[$firstIndex]['coefficients'][0],
+                        (float) $constraints[$firstIndex]['coefficients'][1],
+                    ],
+                    [
+                        (float) $constraints[$secondIndex]['coefficients'][0],
+                        (float) $constraints[$secondIndex]['coefficients'][1],
+                    ],
+                ];
+
+                if ($this->invertTwoByTwoMatrix($matrix) !== null) {
+                    return [$firstIndex, $secondIndex];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function invertTwoByTwoMatrix(array $matrix): ?array
+    {
+        $a = (float) $matrix[0][0];
+        $b = (float) $matrix[0][1];
+        $c = (float) $matrix[1][0];
+        $d = (float) $matrix[1][1];
+
+        $determinant = ($a * $d) - ($b * $c);
+
+        if (abs($determinant) <= self::EPSILON) {
+            return null;
+        }
+
+        return [
+            [
+                $d / $determinant,
+                -$b / $determinant,
+            ],
+            [
+                -$c / $determinant,
+                $a / $determinant,
+            ],
+        ];
+    }
+
+    private function calculateLhs(array $constraint, array $solution): float
+    {
+        $lhs = 0.0;
+
+        foreach ($constraint['coefficients'] as $variableIndex => $coefficient) {
+            $lhs += (float) $coefficient * (float) (
+                $solution['x' . ($variableIndex + 1)] ?? 0.0
+            );
+        }
+
+        return $lhs;
+    }
+
+    private function countDecisionVariablesFromConstraints(array $constraints): int
+    {
+        $max = 0;
+
+        foreach ($constraints as $constraint) {
+            $max = max($max, count($constraint['coefficients'] ?? []));
+        }
+
+        return $max;
     }
 
     private function buildDecisionVariables(array $solution): array
@@ -310,6 +600,7 @@ class SensitivityAnalysisService
         float|int|string|null $objectiveValue
     ): string {
         $optimization = strtolower($project->optimization_type->value);
+
         $variablesText = ! empty($decisionVariables)
             ? implode(', ', array_map(
                 fn ($value, $name) => $name . ' = ' . $this->cleanValue((float) $value),
@@ -367,41 +658,6 @@ class SensitivityAnalysisService
         }
 
         return rtrim(rtrim(number_format($roundedValue, 2, '.', ''), '0'), '.');
-    }
-
-    private function roundShadowPriceRows(array $rows): array
-    {
-        return array_map(function (array $row): array {
-            if (array_key_exists('current_rhs', $row)) {
-                $row['current_rhs'] = $this->roundNumber($row['current_rhs']);
-            }
-
-            if (array_key_exists('slack', $row)) {
-                $row['slack'] = $this->roundNumber($row['slack']);
-            }
-
-            if (array_key_exists('shadowPrice', $row)) {
-                $row['shadowPrice'] = $this->roundNumber($row['shadowPrice']);
-            }
-
-            return $row;
-        }, $rows);
-    }
-
-    private function roundVariables(array $values): array
-    {
-        $rounded = [];
-
-        foreach ($values as $key => $value) {
-            if (is_numeric($value)) {
-                $rounded[$key] = $this->roundNumber((float) $value);
-                continue;
-            }
-
-            $rounded[$key] = $value;
-        }
-
-        return $rounded;
     }
 
     private function roundNumber(float|int|string|null $value): float

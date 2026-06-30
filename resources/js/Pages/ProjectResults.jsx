@@ -68,6 +68,13 @@ export default function ProjectResults({ auth, projectId }) {
     const [errorMessage, setErrorMessage] = useState('');
 
     useEffect(() => {
+        setActiveTab('overview');
+        setProject(null);
+        setSolutions([]);
+        setRuntimeResults({});
+        setLoadingMethod(null);
+        setErrorMessage('');
+
         loadProjectData();
     }, [projectId]);
 
@@ -120,7 +127,15 @@ export default function ProjectResults({ auth, projectId }) {
         }
 
         if (tab.key === 'graphical' && !canUseGraphicalMethod(project)) {
-            setLoadingMethod(null);
+            setRuntimeResults((previousResults) => ({
+                ...previousResults,
+                [tab.key]: null,
+            }));
+
+            setErrorMessage(
+                'O método gráfico só pode ser usado em problemas com exatamente 2 variáveis.'
+            );
+
             return;
         }
 
@@ -131,19 +146,25 @@ export default function ProjectResults({ auth, projectId }) {
                 `/projects/${projectId}/solve/${tab.key}`
             );
 
+            const methodResult = extractResultData(response.data) || response.data;
+
             setRuntimeResults((previousResults) => ({
                 ...previousResults,
-                [tab.key]: response.data,
+                [tab.key]: methodResult,
             }));
-
-            setActiveTab(tab.key);
 
             const refreshedSolutions = await axios.get(
                 `/projects/${projectId}/solutions`
             );
 
             setSolutions(extractSolutions(refreshedSolutions.data));
+            setActiveTab(tab.key);
         } catch (error) {
+            setRuntimeResults((previousResults) => ({
+                ...previousResults,
+                [tab.key]: null,
+            }));
+
             const friendlyMessage = getFriendlyMethodError(
                 error,
                 tab.key,
@@ -151,9 +172,10 @@ export default function ProjectResults({ auth, projectId }) {
                 project
             );
 
-            if (friendlyMessage) {
-                setErrorMessage(friendlyMessage);
-            }
+            setErrorMessage(
+                friendlyMessage ||
+                    `Não foi possível executar o método ${tab.label}.`
+            );
         } finally {
             setLoadingMethod(null);
         }
@@ -228,7 +250,16 @@ function ResultContent({
     }
 
     if (activeTab === 'graphical') {
-        return <GraphicalResult data={resultData || {}} project={project} />;
+        if (!resultData) {
+            return (
+                <EmptyState
+                    title="Resultado ainda não disponível"
+                    description="Execute o método gráfico para visualizar este resultado."
+                />
+            );
+        }
+
+        return <GraphicalResult data={resultData} project={project} />;
     }
 
     if (!resultData) {
@@ -339,7 +370,7 @@ function getFriendlyMethodError(error, methodKey, methodLabel, project) {
         error?.response?.data?.errors?.detalhe;
 
     if (methodKey === 'graphical' && !canUseGraphicalMethod(project)) {
-        return '';
+        return 'O método gráfico só pode ser usado em problemas com exatamente 2 variáveis.';
     }
 
     if (
@@ -347,10 +378,11 @@ function getFriendlyMethodError(error, methodKey, methodLabel, project) {
         typeof backendDetail === 'string' &&
         backendDetail.toLowerCase().includes('exatamente 2')
     ) {
-        return '';
+        return 'O método gráfico só pode ser usado em problemas com exatamente 2 variáveis.';
     }
 
     return (
+        backendDetail ||
         backendMessage ||
         `Não foi possível executar o método ${methodLabel}.`
     );

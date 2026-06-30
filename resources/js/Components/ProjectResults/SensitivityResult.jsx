@@ -95,6 +95,37 @@ export default function SensitivityResult({
             />
 
             <TableSection
+                title="Intervalos dos Coeficientes"
+                description="Esses intervalos mostram quanto cada coeficiente da função objetivo pode variar sem alterar a base ótima atual."
+                columns={[
+                    'Variável',
+                    'Coeficiente Atual',
+                    'Custo Reduzido',
+                    'Aumento Permitido',
+                    'Redução Permitida',
+                ]}
+                rows={sensitivityData.objectiveRanges}
+                emptyText="Nenhum intervalo de coeficiente foi encontrado para este resultado."
+                renderRow={(row, index) => (
+                    <tr key={row.variable || index}>
+                        <TableCell>
+                            {normalizeVariableName(row.variable, index)}
+                        </TableCell>
+
+                        <TableCell>
+                            <StrongNumber>
+                                {formatNumber(row.currentCoefficient)}
+                            </StrongNumber>
+                        </TableCell>
+
+                        <TableCell>{formatNumber(row.reducedCost)}</TableCell>
+                        <TableCell>{formatNumber(row.allowableIncrease)}</TableCell>
+                        <TableCell>{formatNumber(row.allowableDecrease)}</TableCell>
+                    </tr>
+                )}
+            />
+
+            <TableSection
                 title="Intervalos de Sensibilidade"
                 columns={['Restrição', 'RHS Atual', 'Mínimo', 'Máximo', 'Folga']}
                 rows={sensitivityData.ranges}
@@ -312,6 +343,7 @@ function normalizeSensitivityData(data, project, solutions) {
 
     const shadowPrices = normalizeShadowPrices(source, project);
     const reducedCosts = normalizeReducedCosts(source, optimalVariables);
+    const objectiveRanges = normalizeObjectiveRanges(source);
     const ranges = normalizeRanges(source, project, shadowPrices);
 
     const activeRestrictions = normalizeRestrictionList(
@@ -347,6 +379,7 @@ function normalizeSensitivityData(data, project, solutions) {
         objectiveValue,
         shadowPrices,
         reducedCosts,
+        objectiveRanges,
         ranges,
         activeRestrictions: inferredActiveRestrictions,
         slackRestrictions: inferredSlackRestrictions,
@@ -398,14 +431,6 @@ function extractSensitivitySource(data) {
 }
 
 function normalizeOptimalVariables(source, data, auxiliarySolutionData) {
-    const auxiliaryVariables = normalizeVariableEntries(
-        auxiliarySolutionData?.variables
-    );
-
-    if (auxiliaryVariables.length > 0) {
-        return auxiliaryVariables;
-    }
-
     const candidates = [
         source?.optimal_variables,
         source?.decision_variables,
@@ -427,6 +452,14 @@ function normalizeOptimalVariables(source, data, auxiliarySolutionData) {
         }
     }
 
+    const auxiliaryVariables = normalizeVariableEntries(
+        auxiliarySolutionData?.variables
+    );
+
+    if (auxiliaryVariables.length > 0) {
+        return auxiliaryVariables;
+    }
+
     return [];
 }
 
@@ -441,12 +474,6 @@ function normalizeVariableEntries(value) {
 }
 
 function normalizeObjectiveValue(source, data, auxiliarySolutionData) {
-    const auxiliaryValue = Number(auxiliarySolutionData?.objectiveValue);
-
-    if (Number.isFinite(auxiliaryValue)) {
-        return auxiliaryValue;
-    }
-
     const candidates = [
         source?.objective_value,
         source?.optimal_value,
@@ -470,11 +497,55 @@ function normalizeObjectiveValue(source, data, auxiliarySolutionData) {
         }
     }
 
+    const auxiliaryValue = Number(auxiliarySolutionData?.objectiveValue);
+
+    if (Number.isFinite(auxiliaryValue)) {
+        return auxiliaryValue;
+    }
+
     return null;
+}
+
+function normalizeObjectiveRanges(source) {
+    const raw =
+        source?.objective_range_rows ||
+        source?.objective_ranges ||
+        source?.objectiveRanges ||
+        source?.sensitivity_objective_ranges ||
+        [];
+
+    return normalizeArrayRows(raw).map((row, index) => ({
+        variable: normalizeVariableName(
+            row.variable || row.name || row.label || `X${index + 1}`,
+            index
+        ),
+        currentCoefficient:
+            row.current_coefficient ??
+            row.currentCoefficient ??
+            row.coefficient ??
+            row.value ??
+            null,
+        reducedCost:
+            row.reduced_cost ??
+            row.reducedCost ??
+            row.cost ??
+            0,
+        allowableIncrease:
+            row.allowable_increase ??
+            row.allowableIncrease ??
+            row.increase ??
+            null,
+        allowableDecrease:
+            row.allowable_decrease ??
+            row.allowableDecrease ??
+            row.decrease ??
+            null,
+    }));
 }
 
 function normalizeShadowPrices(source, project) {
     const raw =
+        source?.shadow_price_rows ||
         source?.shadow_prices ||
         source?.shadowPrices ||
         source?.dual_values ||
@@ -526,6 +597,7 @@ function normalizeShadowPrices(source, project) {
 
 function normalizeReducedCosts(source, optimalVariables) {
     const raw =
+        source?.reduced_cost_rows ||
         source?.reduced_costs ||
         source?.reducedCosts ||
         source?.costs_reduced ||
@@ -578,6 +650,7 @@ function normalizeReducedCosts(source, optimalVariables) {
 
 function normalizeRanges(source, project, shadowPrices) {
     const raw =
+        source?.rhs_range_rows ||
         source?.sensitivity_ranges ||
         source?.ranges ||
         source?.rhs_ranges ||
@@ -620,7 +693,35 @@ function normalizeRanges(source, project, shadowPrices) {
             row.folga ??
             row.remaining ??
             null,
-    }));
+        allowableIncrease:
+            row.allowable_increase ??
+            row.allowableIncrease ??
+            row.increase ??
+            null,
+        allowableDecrease:
+            row.allowable_decrease ??
+            row.allowableDecrease ??
+            row.decrease ??
+            null,
+    })).map((row) => {
+        const currentRhs = Number(row.currentRhs);
+        const allowableIncrease = Number(row.allowableIncrease);
+        const allowableDecrease = Number(row.allowableDecrease);
+
+        return {
+            ...row,
+            minimum:
+                row.minimum ??
+                (Number.isFinite(currentRhs) && Number.isFinite(allowableDecrease)
+                    ? currentRhs - allowableDecrease
+                    : null),
+            maximum:
+                row.maximum ??
+                (Number.isFinite(currentRhs) && Number.isFinite(allowableIncrease)
+                    ? currentRhs + allowableIncrease
+                    : null),
+        };
+    });
 
     if (rows.length > 0) {
         return rows;
@@ -832,6 +933,7 @@ function hasSensitivityData(data) {
         data.optimalVariables.length > 0 ||
         data.shadowPrices.length > 0 ||
         data.reducedCosts.length > 0 ||
+        data.objectiveRanges.length > 0 ||
         data.ranges.length > 0 ||
         data.objectiveValue !== null
     );

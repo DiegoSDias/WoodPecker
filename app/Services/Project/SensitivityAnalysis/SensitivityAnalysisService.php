@@ -81,11 +81,12 @@ class SensitivityAnalysisService
         );
 
         $analysis = [
-            'status' => $primal['status'] ?? 'optimal',
+            'status' => ! empty($primal['has_multiple_solution'])
+                ? 'multiple'
+                : ($primal['status'] ?? 'optimal'),
             'method_used' => 'sensitivity',
             'optimization_type' => $project->optimization_type->value,
             'objective_value' => $this->sensitivityMathService->roundNumber($primal['objective_value'] ?? null),
-            'solution' => $decisionVariables,
             'primal_solution' => $decisionVariables,
             'variables' => $decisionVariables,
             'shadow_prices' => $shadowPriceRows,
@@ -133,10 +134,10 @@ class SensitivityAnalysisService
                 'value' => $this->sensitivityMathService->roundNumber($variableValue),
                 'reducedCost' => $this->sensitivityMathService->roundNumber($reducedCost),
                 'interpretation' => abs($variableValue) > self::EPSILON
-                    ? 'Variavel basica'
+                    ? 'Variável básica'
                     : (abs($reducedCost) > self::EPSILON
                         ? 'Fora da base'
-                        : 'Variavel basica'),
+                        : 'Variável básica'),
             ];
         }
 
@@ -222,7 +223,7 @@ class SensitivityAnalysisService
                 $decisionVariables,
                 array_keys($decisionVariables)
             ))
-            : 'sem variaveis otimas identificadas';
+            : 'sem variáveis ótimas identificadas';
 
         $activeConstraints = array_values(array_map(
             fn (array $row) => $row['restriction'],
@@ -242,19 +243,19 @@ class SensitivityAnalysisService
 
         $objectiveRangesText = count($objectiveRangeRows) > 0
             ? count($objectiveRangeRows) . ' intervalos de coeficientes analisados'
-            : 'nenhum intervalo de coeficiente disponivel';
+            : 'nenhum intervalo de coeficiente disponível';
 
         $rhsRangesText = count($rhsRangeRows) > 0
             ? count($rhsRangeRows) . ' intervalos de RHS analisados'
-            : 'nenhum intervalo de RHS disponivel';
+            : 'nenhum intervalo de RHS disponível';
 
         return sprintf(
-            'A analise de sensibilidade para o problema de %s encontrou Z = %s, com %s. As restricoes ativas sao %s, enquanto as restricoes com folga sao %s. Tambem foram avaliados %s e %s, permitindo observar como pequenas variacoes nos coeficientes e nos lados direitos podem afetar a solucao otima.',
+            'A análise de sensibilidade para o problema de %s encontrou Z = %s, com %s. As restrições ativas são %s, enquanto as restrições com folga são %s. Também foram avaliados %s e %s, permitindo observar como pequenas variações nos coeficientes e nos lados direitos podem afetar a solução ótima.',
             $optimization,
             $this->sensitivityMathService->cleanValue((float) ($objectiveValue ?? 0.0)),
             $variablesText,
-            ! empty($activeConstraints) ? implode(', ', $activeConstraints) : 'nenhuma restricao ativa identificada',
-            ! empty($slackConstraints) ? implode(', ', $slackConstraints) : 'nenhuma restricao com folga identificada',
+            ! empty($activeConstraints) ? implode(', ', $activeConstraints) : 'nenhuma restrição ativa identificada',
+            ! empty($slackConstraints) ? implode(', ', $slackConstraints) : 'nenhuma restrição com folga identificada',
             $objectiveRangesText,
             $rhsRangesText
         );

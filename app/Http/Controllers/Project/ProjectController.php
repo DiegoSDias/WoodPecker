@@ -27,7 +27,6 @@ class ProjectController extends Controller
 
     public function show(Project $project)
     {
-        dd('oi');
         try {
             return $this->sendResponse(
                 ['project' => $this->projectService->load($project)],

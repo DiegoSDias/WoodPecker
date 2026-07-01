@@ -14,6 +14,19 @@ class LinearProgrammingCoreService
         protected SimplexSolutionExtractorService $simplexSolutionExtractorService
     ) {}
 
+    // Encaminha a montagem do problema dual para o builder especializado.
+    public function buildDualProblem(
+        array $objectiveCoefficients,
+        array $constraints,
+        string $optimizationType
+    ): array {
+        return $this->problemBuilderService->buildDualProblem(
+            $objectiveCoefficients,
+            $constraints,
+            $optimizationType
+        );
+    }
+
     // Executa o Simplex principal e devolve o resultado final do calculo.
     //SIMPLEX
     public function solveSimplex(

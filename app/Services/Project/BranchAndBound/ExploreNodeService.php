@@ -4,25 +4,22 @@ namespace App\Services\Project\BranchAndBound;
 
 use App\Models\Project;
 use App\Services\Project\Core\LinearProgrammingCoreService;
-use App\Services\Project\ProjectService;
 use App\Services\Project\Support\ProjectAnalysisSupportService;
 
 class ExploreNodeService
 {
-
     private const MAX_NODES = 64;
     private const MAX_DEPTH = 20;
 
-        // Função __construct respons?vel por executar esta etapa do service.
+    // Função __construct responsável por preparar as dependencias usadas na exploracao da arvore.
     public function __construct(
         protected LinearProgrammingCoreService $core,
-        protected ProjectService $projectService,
         protected FormatBoundService $formatBoundService,
-        protected BranchAndBoundService $branchAndBoundService,
+        protected BranchAndBoundRulesService $branchAndBoundRulesService,
         protected ProjectAnalysisSupportService $analysisSupport
     ) {}
 
-    // Função exploreNode responsável por executar esta etapa do service.
+    // Executa a exploracao recursiva de um no da arvore.
     public function exploreNode(
         Project $project,
         array $extraConstraints,
@@ -32,8 +29,7 @@ class ExploreNodeService
         array &$summary,
         ?array &$bestSolution,
         int &$nextId
-    ): void 
-    {
+    ): void {
         if ($summary['nodes_explored'] >= self::MAX_NODES || $depth > self::MAX_DEPTH) {
             $summary['termination_reason'] ??= 'limit';
             return;
@@ -78,7 +74,7 @@ class ExploreNodeService
             return;
         }
 
-        if ($this->branchAndBoundService->cannotBeatIncumbent($project, $bestSolution, $relaxation)) {
+        if ($this->branchAndBoundRulesService->cannotBeatIncumbent($project, $bestSolution, $relaxation)) {
             $record['status'] = 'pruned';
             $record['pruned_reason'] = 'bound_not_better';
             $summary['pruned_nodes']++;
@@ -86,19 +82,19 @@ class ExploreNodeService
             return;
         }
 
-        if ($this->branchAndBoundService->isIntegerSolution($record['solution'])) {
+        if ($this->branchAndBoundRulesService->isIntegerSolution($record['solution'])) {
             $record['status'] = 'integer';
             $summary['integer_nodes']++;
-            $this->branchAndBoundService->updateBestSolution($bestSolution, $record, $project);
+            $this->branchAndBoundRulesService->updateBestSolution($bestSolution, $record, $project);
             $iterations[] = $record;
             return;
         }
-        $fractional = $this->branchAndBoundService->findFractionalVariable($record['solution']);
-        //pq tem isso? 
+
+        $fractional = $this->branchAndBoundRulesService->findFractionalVariable($record['solution']);
         if ($fractional === null) {
             $record['status'] = 'integer';
             $summary['integer_nodes']++;
-            $this->branchAndBoundService->updateBestSolution($bestSolution, $record, $project);
+            $this->branchAndBoundRulesService->updateBestSolution($bestSolution, $record, $project);
             $iterations[] = $record;
             return;
         }

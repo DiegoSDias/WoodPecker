@@ -13,7 +13,7 @@ class ProjectAnalysisSupportService
     {
         return $project->constraints->map(
             fn($constraint) => [
-                'coefficients' => $constraint->coefficients,
+                'coefficients' => array_values($constraint->coefficients ?? []),
                 'operator' => $constraint->operator->value,
                 'rhs_value' => $constraint->rhs_value,
             ]

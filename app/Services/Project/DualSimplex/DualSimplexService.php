@@ -4,6 +4,7 @@ namespace App\Services\Project\DualSimplex;
 
 use App\Models\Project;
 use App\Services\Project\Core\LinearProgrammingCoreService;
+use App\Services\Project\Core\ProblemBuilderService;
 use App\Services\Project\Support\ProjectAnalysisSupportService;
 use App\Services\Project\ProjectService;
 
@@ -11,6 +12,7 @@ class DualSimplexService
 {
     // Injeta o núcleo de cálculo, o service de projetos e o apoio compartilhado de análise.
     public function __construct(
+        protected ProblemBuilderService $problemBuilderService,
         protected LinearProgrammingCoreService $core,
         protected ProjectService $projectService,
         protected ProjectAnalysisSupportService $analysisSupport
@@ -28,7 +30,7 @@ class DualSimplexService
             $project->optimization_type->value
         );
 
-        $dualProblem = $this->core->buildDualProblem(
+        $dualProblem = $this->problemBuilderService->buildDualProblem(
             $project->objectiveFunction->coefficients,
             $this->analysisSupport->formatConstraints($project),
             $project->optimization_type->value

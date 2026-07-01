@@ -2,23 +2,19 @@
 
 namespace App\Services\Project\SensitivityAnalysis;
 
-use App\Models\Project;
-use App\Services\Project\Core\LinearProgrammingCoreService;
-use App\Services\Project\ProjectService;
 use App\Services\Project\Support\ProjectAnalysisSupportService;
 
 class BuildRanges
 {
     private const EPSILON = 1e-5;
 
-    // Fun??o __construct respons?vel por executar esta etapa do service.
+    // Função __construct responsável por ligar o gerador de intervalos aos helpers matemáticos e de grafo.
     public function __construct(
-        protected SensitivityAnalysisService $sensitivityAnalysis,
-        protected LinearProgrammingCoreService $core,
-        protected ProjectService $projectService,
+        protected SensitivityMathService $sensitivityMathService,
         protected ProjectAnalysisSupportService $analysisSupport,
     ) {}
 
+    // Monta os intervalos de variacao dos coeficientes da funcao objetivo.
     public function buildObjectiveRanges(
         array $coefficients,
         array $reducedCosts,
@@ -26,6 +22,9 @@ class BuildRanges
         array $solution,
         string $optimizationType
     ): array {
+        $coefficients = array_values($coefficients);
+        $solution = array_values($solution);
+
         $twoVariableRanges = $this->buildTwoVariableObjectiveRanges(
             $coefficients,
             $constraints,
@@ -45,13 +44,13 @@ class BuildRanges
 
             $ranges[$name] = [
                 'variable' => strtoupper($name),
-                'current_coefficient' => $this->sensitivityAnalysis->roundNumber((float) $value),
-                'reduced_cost' => $this->sensitivityAnalysis->roundNumber($reducedCost),
+                'current_coefficient' => $this->sensitivityMathService->roundNumber((float) $value),
+                'reduced_cost' => $this->sensitivityMathService->roundNumber($reducedCost),
                 'allowable_increase' => abs($reducedCost) > self::EPSILON
-                    ? $this->sensitivityAnalysis->roundNumber(abs($reducedCost))
+                    ? $this->sensitivityMathService->roundNumber(abs($reducedCost))
                     : null,
                 'allowable_decrease' => abs($reducedCost) > self::EPSILON
-                    ? $this->sensitivityAnalysis->roundNumber(abs($reducedCost))
+                    ? $this->sensitivityMathService->roundNumber(abs($reducedCost))
                     : null,
             ];
         }
@@ -88,7 +87,7 @@ class BuildRanges
         $rows = [];
 
         foreach ($coefficients as $targetIndex => $coefficient) {
-            $range = $this->sensitivityAnalysis->calculateObjectiveCoefficientRange(
+            $range = $this->sensitivityMathService->calculateObjectiveCoefficientRange(
                 $coefficients,
                 $vertices,
                 $currentPoint,
@@ -106,7 +105,7 @@ class BuildRanges
 
             $rows['x' . ($targetIndex + 1)] = [
                 'variable' => 'X' . ($targetIndex + 1),
-                'current_coefficient' => $this->sensitivityAnalysis->roundNumber($currentCoefficient),
+                'current_coefficient' => $this->sensitivityMathService->roundNumber($currentCoefficient),
                 'reduced_cost' => 0.0,
                 'allowable_increase' => $maximum === null
                     ? null
@@ -134,7 +133,7 @@ class BuildRanges
 
         foreach ($constraints as $index => $constraint) {
             $rhs = (float) $constraint['rhs_value'];
-            $lhs = $this->sensitivityAnalysis->calculateLhs($constraint, $solution);
+            $lhs = $this->sensitivityMathService->calculateLhs($constraint, $solution);
 
             $slack = match ($constraint['operator']) {
                 '<=' => $rhs - $lhs,
@@ -164,29 +163,29 @@ class BuildRanges
 
             $ranges['c' . ($index + 1)] = [
                 'restriction' => 'R' . ($index + 1),
-                'current_rhs' => $this->sensitivityAnalysis->roundNumber($rhs),
-                'slack' => $this->sensitivityAnalysis->roundNumber($slack),
-                'shadow_price' => $this->sensitivityAnalysis->roundNumber(
+                'current_rhs' => $this->sensitivityMathService->roundNumber($rhs),
+                'slack' => $this->sensitivityMathService->roundNumber($slack),
+                'shadow_price' => $this->sensitivityMathService->roundNumber(
                     (float) ($shadowPrices['y' . ($index + 1)] ?? 0.0)
                 ),
                 'allowable_increase' => $maximum === null
                     ? null
-                    : $this->sensitivityAnalysis->roundNumber($maximum - $rhs),
+                    : $this->sensitivityMathService->roundNumber($maximum - $rhs),
                 'allowable_decrease' => $minimum === null
                     ? null
-                    : $this->sensitivityAnalysis->roundNumber($rhs - $minimum),
+                    : $this->sensitivityMathService->roundNumber($rhs - $minimum),
                 'minimum' => $minimum === null
                     ? null
-                    : $this->sensitivityAnalysis->roundNumber($minimum),
+                    : $this->sensitivityMathService->roundNumber($minimum),
                 'maximum' => $maximum === null
                     ? null
-                    : $this->sensitivityAnalysis->roundNumber($maximum),
+                    : $this->sensitivityMathService->roundNumber($maximum),
                 'minimum_label' => $minimum === null
                     ? 'Sem limite inferior'
-                    : $this->sensitivityAnalysis->cleanValue((float) $minimum),
+                    : $this->sensitivityMathService->cleanValue((float) $minimum),
                 'maximum_label' => $maximum === null
                     ? 'Sem limite superior'
-                    : $this->sensitivityAnalysis->cleanValue((float) $maximum),
+                    : $this->sensitivityMathService->cleanValue((float) $maximum),
             ];
         }
 
@@ -231,7 +230,7 @@ class BuildRanges
             ];
         }
 
-        $basisIndexes = $this->sensitivityAnalysis->findTwoVariableBasis(
+        $basisIndexes = $this->sensitivityMathService->findTwoVariableBasis(
             $constraints,
             $solution,
             $targetConstraintIndex
@@ -246,18 +245,21 @@ class BuildRanges
 
         [$firstBasisIndex, $secondBasisIndex] = $basisIndexes;
 
+        $firstBasisCoefficients = array_values($constraints[$firstBasisIndex]['coefficients'] ?? []);
+        $secondBasisCoefficients = array_values($constraints[$secondBasisIndex]['coefficients'] ?? []);
+
         $basisMatrix = [
             [
-                (float) $constraints[$firstBasisIndex]['coefficients'][0],
-                (float) $constraints[$firstBasisIndex]['coefficients'][1],
+                (float) ($firstBasisCoefficients[0] ?? 0.0),
+                (float) ($firstBasisCoefficients[1] ?? 0.0),
             ],
             [
-                (float) $constraints[$secondBasisIndex]['coefficients'][0],
-                (float) $constraints[$secondBasisIndex]['coefficients'][1],
+                (float) ($secondBasisCoefficients[0] ?? 0.0),
+                (float) ($secondBasisCoefficients[1] ?? 0.0),
             ],
         ];
 
-        $inverse = $this->sensitivityAnalysis->invertTwoByTwoMatrix($basisMatrix);
+        $inverse = $this->sensitivityMathService->invertTwoByTwoMatrix($basisMatrix);
 
         if ($inverse === null) {
             return [
@@ -296,8 +298,9 @@ class BuildRanges
                 continue;
             }
 
-            $a1 = (float) $constraint['coefficients'][0];
-            $a2 = (float) $constraint['coefficients'][1];
+            $constraintCoefficients = array_values($constraint['coefficients'] ?? []);
+            $a1 = (float) ($constraintCoefficients[0] ?? 0.0);
+            $a2 = (float) ($constraintCoefficients[1] ?? 0.0);
             $constraintRhs = (float) $constraint['rhs_value'];
 
             $currentValue = $a1 * $currentX[0] + $a2 * $currentX[1];
@@ -353,14 +356,14 @@ class BuildRanges
         ];
     }
 
-    // ver se realmente precisa dessa função
+    // Converte null para null e arredonda qualquer outro valor opcional.
     private function roundNullableNumber(float|int|string|null $value): ?float
     {
         if ($value === null || $value === '') {
             return null;
         }
 
-        return $this->sensitivityAnalysis->roundNumber($value);
+        return $this->sensitivityMathService->roundNumber($value);
     }
 
     // Conta quantas variaveis de decisao existem nas restricoes.

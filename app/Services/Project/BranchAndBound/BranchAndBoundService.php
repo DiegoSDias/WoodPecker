@@ -3,19 +3,16 @@
 namespace App\Services\Project\BranchAndBound;
 
 use App\Models\Project;
-use App\Services\Project\Core\LinearProgrammingCoreService;
 use App\Services\Project\ProjectService;
 
 class BranchAndBoundService
 {
-    private const EPSILON = 1e-6;
-
-    // Função __construct respons?vel por executar esta etapa do service.
+    // Função __construct responsável por ligar o serviço principal do Branch and Bound.
     public function __construct(
-        protected LinearProgrammingCoreService $core,
         protected ProjectService $projectService,
         protected ExploreNodeService $exploreNodeService,
         protected FormatBoundService $formatBoundService,
+        protected BranchAndBoundRulesService $branchAndBoundRulesService,
     ) {}
 
     // Executa o metodo principal do service e devolve o resultado final.
@@ -53,7 +50,7 @@ class BranchAndBoundService
             'best_solution' => $this->formatBoundService->formatBestSolution($bestSolution),
             'best_path_ids' => $this->buildBestPathIds($iterations, $bestSolution['node_id'] ?? null),
             'iterations' => $iterations,
-            'solution' => $this->formatBoundService->formatBestSolution($bestSolution)
+            'solution' => $this->formatBoundService->formatBestSolution($bestSolution),
         ];
 
         $solution = $this->projectService->persistSolution(
@@ -67,99 +64,7 @@ class BranchAndBoundService
         return $result;
     }
 
-    // Verifica se a solucao atual ja possui apenas valores inteiros.
-    public function isIntegerSolution(array $solution): bool
-    {
-        foreach ($solution as $value) {
-            if (abs($value - round($value)) > self::EPSILON) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    // Localiza a variavel fracionaria mais relevante para ramificar.
-    public function findFractionalVariable(array $solution): ?array
-    {
-        $bestIndex = null;
-        $bestFraction = 0.0;
-
-        foreach ($solution as $name => $value) {
-            $fraction = abs($value - round($value));
-            if ($fraction <= self::EPSILON) {
-                continue;
-            }
-
-            if ($fraction > $bestFraction) {
-                $bestFraction = $fraction;
-                $bestIndex = (int) substr($name, 1) - 1;
-            }
-        }
-
-        if ($bestIndex === null) {
-            return null;
-        }
-
-        $variableName = 'x' . ($bestIndex + 1);
-
-        return [
-            'index' => $bestIndex,
-            'name' => $variableName,
-            'value' => (float) $solution[$variableName],
-        ];
-    }
-
-    // Atualiza a melhor solucao inteira encontrada ate o momento.
-    public function updateBestSolution(?array &$bestSolution, array $record, Project $project): void
-    {
-        $candidate = [
-            'node_id' => $record['node_id'],
-            'parent_id' => $record['parent_id'],
-            'depth' => $record['depth'],
-            'objective_value' => $record['objective_value'],
-            'solution' => $record['solution'],
-        ];
-
-        if ($bestSolution === null) {
-            $bestSolution = $candidate;
-            return;
-        }
-
-        $current = (float) $candidate['objective_value'];
-        $best = (float) $bestSolution['objective_value'];
-
-        if ($project->optimization_type->value === 'max' && $current > $best + self::EPSILON) {
-            $bestSolution = $candidate;
-        }
-
-        if ($project->optimization_type->value === 'min' && $current < $best - self::EPSILON) {
-            $bestSolution = $candidate;
-        }
-    }
-
-    // qual a função desse metodo?
-    public function cannotBeatIncumbent(
-        Project $project,
-        ?array $bestSolution,
-        array $relaxation
-    ): bool 
-    {
-        if ($bestSolution === null) {
-            return false;
-        }
-
-        $current = (float) ($relaxation['objective_value'] ?? 0.0);
-        $best = (float) ($bestSolution['objective_value'] ?? 0.0);
-
-        if ($project->optimization_type->value === 'max') {
-            return $current <= $best + self::EPSILON;
-        }
-
-        return $current >= $best - self::EPSILON;
-    }
-
-    // Reconstrói o caminho da melhor solucao a partir da arvore explorada.
+    // Reconstrói o caminho da melhor solução a partir da arvore explorada.
     private function buildBestPathIds(array $iterations, ?int $bestNodeId): array
     {
         if ($bestNodeId === null) {
@@ -199,7 +104,6 @@ class BranchAndBoundService
             'best_objective_value' => $bestSolution['objective_value'] ?? null,
         ];
     }
-
 
     // Define o status final do Branch and Bound.
     private function resolveStatus(?array $bestSolution, array $summary): string

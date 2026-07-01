@@ -65,9 +65,13 @@ class BuildRanges
         array $solution,
         string $optimizationType
     ): array {
+        $solutionValues = isset($solution['x1'], $solution['x2'])
+            ? [(float) $solution['x1'], (float) $solution['x2']]
+            : array_values($solution);
+
         if (
             count($coefficients) !== 2
-            || ! isset($solution['x1'], $solution['x2'])
+            || count($solutionValues) < 2
         ) {
             return [];
         }
@@ -80,8 +84,8 @@ class BuildRanges
         }
 
         $currentPoint = [
-            (float) $solution['x1'],
-            (float) $solution['x2'],
+            (float) $solutionValues[0],
+            (float) $solutionValues[1],
         ];
 
         $rows = [];

@@ -34,8 +34,12 @@ class SensitivityMathService
         $otherIndex = $targetIndex === 0 ? 1 : 0;
 
         foreach ($vertices as $vertex) {
-            $a = $currentPoint[$targetIndex] - (float) $vertex[$targetIndex];
-            $b = ((float) $coefficients[$otherIndex] * (float) $vertex[$otherIndex])
+            $vertexValues = isset($vertex['x'], $vertex['y'])
+                ? [(float) $vertex['x'], (float) $vertex['y']]
+                : array_values($vertex);
+
+            $a = $currentPoint[$targetIndex] - (float) ($vertexValues[$targetIndex] ?? 0.0);
+            $b = ((float) $coefficients[$otherIndex] * (float) ($vertexValues[$otherIndex] ?? 0.0))
                 - ((float) $coefficients[$otherIndex] * $currentPoint[$otherIndex]);
 
             if (abs($a) <= self::EPSILON) {

@@ -31,9 +31,9 @@ class SensitivityAnalysisService
 
         $primal = $this->core->solveSimplex(
             $project->objectiveFunction->coefficients,
-            $constraints,
-            $project->optimization_type->value
-        );
+        $constraints,
+        $project->optimization_type->value
+    );
 
         $dualProblem = $this->problemBuilderService->buildDualProblem(
             $project->objectiveFunction->coefficients,

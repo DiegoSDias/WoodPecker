@@ -142,9 +142,9 @@ class LinearProgrammingCoreService
         }
 
         $reducedCosts = $this->simplexSolutionExtractorService->extractReducedCosts(
-            $phase2['tableau'],
-            $problem['decision_count']
-        );
+        $phase2['tableau'],
+        $problem['decision_count']
+    );
 
         $alternativeSolutions = $detectMultipleSolutions
             ? $this->simplexSolutionExtractorService->findAlternativeSolutions(

@@ -573,7 +573,6 @@ function extractSensitivitySource(data) {
         data.sensitivity ||
         data.analysis ||
         data.result ||
-        data.solution ||
         data
     );
 }

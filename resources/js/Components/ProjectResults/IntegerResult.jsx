@@ -30,10 +30,10 @@ export default function IntegerResult({
         ? simplexData.iterations
         : [];
 
+    // analisar se é preciso essa variavel
     const integerIterations = extractIterations(data);
 
-    const iterationsToShow =
-        simplexIterations.length > 0 ? simplexIterations : integerIterations;
+    const iterationsToShow = simplexIterations;
 
     const relaxedSource =
         data?.relaxed_solution ||
@@ -644,6 +644,7 @@ function buildIntegerIterationPrintHtml({
 }
 
 function extractIterations(data) {
+
     const candidates = [
         data?.iterations,
         data?.iterations_history,
